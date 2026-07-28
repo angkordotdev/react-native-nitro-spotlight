@@ -94,6 +94,7 @@ public final class SpotlightView: UIView {
   public override func didMoveToWindow() {
     super.didMoveToWindow()
     guard window != nil else { return }
+    syncFrameToWindow()
     updateLayerFrames()
     // Pre-warm layers to avoid first render stutter.
     spotlightMask.path = UIBezierPath(rect: .zero).cgPath
@@ -108,12 +109,32 @@ public final class SpotlightView: UIView {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
+    syncFrameToWindow()
     updateLayerFrames()
     // Skip while a highlight transition is animating — any layout pass
     // (keyboard, safe-area change, parent resize) would otherwise cancel
     // the in-flight CABasicAnimation and snap the mask to its final path.
     guard !hasRunningPathAnimation else { return }
     redraw(animated: false)
+  }
+
+  // MARK: - Frame Sync
+
+  /// Fabric can lay the Nitro host view out with a collapsed frame (the JS
+  /// `style` does not reach the host's Yoga node), and UIKit never hit-tests
+  /// a view whose ancestor frames don't contain the touch — so backdrop
+  /// touches would never reach hitTest/point(inside:). Drawing already covers
+  /// the window regardless of frame (see makeOverlayPath); mirror that for
+  /// touch by keeping self and the host superview sized to the window.
+  private func syncFrameToWindow() {
+    guard let window, let host = superview, let hostParent = host.superview else { return }
+    let targetHostFrame = hostParent.convert(window.bounds, from: window)
+    if !host.frame.isApproximatelyEqual(to: targetHostFrame) {
+      host.frame = targetHostFrame
+    }
+    if !frame.isApproximatelyEqual(to: host.bounds) {
+      frame = host.bounds
+    }
   }
 
   // MARK: - Layer Frames
@@ -140,6 +161,7 @@ public final class SpotlightView: UIView {
       return
     }
     sourceRect = rect
+    syncFrameToWindow()
     redraw(animated: animated, duration: duration)
   }
 
@@ -154,10 +176,20 @@ public final class SpotlightView: UIView {
 
   // MARK: - Touch Handling
 
+  /// UIKit calls hitTest more than once per touch (and for non-touch queries),
+  /// so pass-through mode must dedupe by event timestamp to fire exactly once.
+  private var lastBackdropEventTimestamp: TimeInterval = -1
+
   public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard !sourceRect.isEmpty else { return nil }
     guard isBackdropPoint(point) else { return nil }
-    if allowOverlayClick { onBackdropPress?(); return nil }
+    if allowOverlayClick {
+      if let event, event.type == .touches, event.timestamp != lastBackdropEventTimestamp {
+        lastBackdropEventTimestamp = event.timestamp
+        onBackdropPress?()
+      }
+      return nil
+    }
     return self
   }
 
