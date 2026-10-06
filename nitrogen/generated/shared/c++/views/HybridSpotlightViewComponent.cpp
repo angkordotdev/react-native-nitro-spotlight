@@ -7,18 +7,12 @@
 
 #include "HybridSpotlightViewComponent.hpp"
 
-#include <string>
-#include <exception>
-#include <utility>
-#include <NitroModules/NitroDefines.hpp>
-#include <NitroModules/JSIConverter.hpp>
-#include <NitroModules/PropNameIDCache.hpp>
-#include <react/renderer/core/RawValue.h>
-#include <react/renderer/core/ShadowNode.h>
-#include <react/renderer/core/ComponentDescriptor.h>
-#include <react/renderer/components/view/ViewProps.h>
+#include <NitroModules/NitroHash.hpp>
+#include <NitroModules/ReactProp.hpp>
 
 namespace margelo::nitro::spotlight::views {
+
+  using namespace facebook;
 
   extern const char HybridSpotlightViewComponentName[] = "SpotlightView";
 
@@ -26,115 +20,31 @@ namespace margelo::nitro::spotlight::views {
                                                      const HybridSpotlightViewProps& sourceProps,
                                                      const react::RawProps& rawProps):
     react::ViewProps(context, sourceProps, rawProps, filterObjectKeys),
-    dimOpacity([&]() -> CachedProp<std::optional<double>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("dimOpacity", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.dimOpacity;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<double>>::fromRawValue(*runtime, value, sourceProps.dimOpacity);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.dimOpacity: ") + exc.what());
-      }
-    }()),
-    shape([&]() -> CachedProp<std::optional<std::string>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("shape", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.shape;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<std::string>>::fromRawValue(*runtime, value, sourceProps.shape);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.shape: ") + exc.what());
-      }
-    }()),
-    borderRadius([&]() -> CachedProp<std::optional<double>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("borderRadius", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.borderRadius;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<double>>::fromRawValue(*runtime, value, sourceProps.borderRadius);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.borderRadius: ") + exc.what());
-      }
-    }()),
-    padding([&]() -> CachedProp<std::optional<double>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("padding", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.padding;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<double>>::fromRawValue(*runtime, value, sourceProps.padding);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.padding: ") + exc.what());
-      }
-    }()),
-    borderWidth([&]() -> CachedProp<std::optional<double>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("borderWidth", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.borderWidth;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<double>>::fromRawValue(*runtime, value, sourceProps.borderWidth);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.borderWidth: ") + exc.what());
-      }
-    }()),
-    borderColor([&]() -> CachedProp<std::optional<std::string>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("borderColor", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.borderColor;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<std::string>>::fromRawValue(*runtime, value, sourceProps.borderColor);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.borderColor: ") + exc.what());
-      }
-    }()),
-    allowOverlayClick([&]() -> CachedProp<std::optional<bool>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("allowOverlayClick", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.allowOverlayClick;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<bool>>::fromRawValue(*runtime, value, sourceProps.allowOverlayClick);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.allowOverlayClick: ") + exc.what());
-      }
-    }()),
-    onTargetLayout([&]() -> CachedProp<std::optional<std::function<void(const Rect& /* rect */)>>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("onTargetLayout", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.onTargetLayout;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<std::function<void(const Rect& /* rect */)>>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onTargetLayout);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.onTargetLayout: ") + exc.what());
-      }
-    }()),
-    onBackdropPress([&]() -> CachedProp<std::optional<std::function<void()>>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("onBackdropPress", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.onBackdropPress;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<std::function<void()>>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.onBackdropPress);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.onBackdropPress: ") + exc.what());
-      }
-    }()),
-    hybridRef([&]() -> CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridSpotlightViewSpec>& /* ref */)>>> {
-      try {
-        const react::RawValue* rawValue = rawProps.at("hybridRef", nullptr, nullptr);
-        if (rawValue == nullptr) return sourceProps.hybridRef;
-        const auto& [runtime, value] = (std::pair<jsi::Runtime*, jsi::Value>)*rawValue;
-        return CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridSpotlightViewSpec>& /* ref */)>>>::fromRawValue(*runtime, value.asObject(*runtime).getProperty(*runtime, PropNameIDCache::get(*runtime, "f")), sourceProps.hybridRef);
-      } catch (const std::exception& exc) {
-        throw std::runtime_error(std::string("SpotlightView.hybridRef: ") + exc.what());
-      }
-    }()) { }
+    dimOpacity(nitro::ReactProp<std::optional<double>>::fromRawValue("SpotlightView", "dimOpacity", rawProps, sourceProps.dimOpacity)),
+    shape(nitro::ReactProp<std::optional<std::string>>::fromRawValue("SpotlightView", "shape", rawProps, sourceProps.shape)),
+    cornerRadius(nitro::ReactProp<std::optional<double>>::fromRawValue("SpotlightView", "cornerRadius", rawProps, sourceProps.cornerRadius)),
+    cutoutPadding(nitro::ReactProp<std::optional<double>>::fromRawValue("SpotlightView", "cutoutPadding", rawProps, sourceProps.cutoutPadding)),
+    ringWidth(nitro::ReactProp<std::optional<double>>::fromRawValue("SpotlightView", "ringWidth", rawProps, sourceProps.ringWidth)),
+    ringColor(nitro::ReactProp<std::optional<std::string>>::fromRawValue("SpotlightView", "ringColor", rawProps, sourceProps.ringColor)),
+    enteringAnimation(nitro::ReactProp<std::optional<std::string>>::fromRawValue("SpotlightView", "enteringAnimation", rawProps, sourceProps.enteringAnimation)),
+    exitAnimation(nitro::ReactProp<std::optional<std::string>>::fromRawValue("SpotlightView", "exitAnimation", rawProps, sourceProps.exitAnimation)),
+    exitDurationMs(nitro::ReactProp<std::optional<double>>::fromRawValue("SpotlightView", "exitDurationMs", rawProps, sourceProps.exitDurationMs)),
+    allowOverlayClick(nitro::ReactProp<std::optional<bool>>::fromRawValue("SpotlightView", "allowOverlayClick", rawProps, sourceProps.allowOverlayClick)),
+    onTargetLayout(nitro::ReactProp<std::optional<std::function<void(const Rect& /* rect */)>>>::fromRawValue("SpotlightView", "onTargetLayout", rawProps, sourceProps.onTargetLayout)),
+    onBackdropPress(nitro::ReactProp<std::optional<std::function<void()>>>::fromRawValue("SpotlightView", "onBackdropPress", rawProps, sourceProps.onBackdropPress)),
+    hybridRef(nitro::ReactProp<std::optional<std::function<void(const std::shared_ptr<HybridSpotlightViewSpec>& /* ref */)>>>::fromRawValue("SpotlightView", "hybridRef", rawProps, sourceProps.hybridRef)) { }
 
   bool HybridSpotlightViewProps::filterObjectKeys(const std::string& propName) {
     switch (hashString(propName)) {
       case hashString("dimOpacity"): return true;
       case hashString("shape"): return true;
-      case hashString("borderRadius"): return true;
-      case hashString("padding"): return true;
-      case hashString("borderWidth"): return true;
-      case hashString("borderColor"): return true;
+      case hashString("cornerRadius"): return true;
+      case hashString("cutoutPadding"): return true;
+      case hashString("ringWidth"): return true;
+      case hashString("ringColor"): return true;
+      case hashString("enteringAnimation"): return true;
+      case hashString("exitAnimation"): return true;
+      case hashString("exitDurationMs"): return true;
       case hashString("allowOverlayClick"): return true;
       case hashString("onTargetLayout"): return true;
       case hashString("onBackdropPress"): return true;
@@ -142,30 +52,5 @@ namespace margelo::nitro::spotlight::views {
       default: return false;
     }
   }
-
-  HybridSpotlightViewComponentDescriptor::HybridSpotlightViewComponentDescriptor(const react::ComponentDescriptorParameters& parameters)
-    : ConcreteComponentDescriptor(parameters,
-                                  react::RawPropsParser(/* enableJsiParser */ true)) {}
-
-  std::shared_ptr<const react::Props> HybridSpotlightViewComponentDescriptor::cloneProps(const react::PropsParserContext& context,
-                                                                                         const std::shared_ptr<const react::Props>& props,
-                                                                                         react::RawProps rawProps) const {
-    // 1. Prepare raw props parser
-    rawProps.parse(rawPropsParser_);
-    // 2. Copy props with Nitro's cached copy constructor
-    return HybridSpotlightViewShadowNode::Props(context, /* & */ rawProps, props);
-  }
-
-#ifdef ANDROID
-  void HybridSpotlightViewComponentDescriptor::adopt(react::ShadowNode& shadowNode) const {
-    // This is called immediately after `ShadowNode` is created, cloned or in progress.
-    // On Android, we need to wrap props in our state, which gets routed through Java and later unwrapped in JNI/C++.
-    auto& concreteShadowNode = static_cast<HybridSpotlightViewShadowNode&>(shadowNode);
-    const std::shared_ptr<const HybridSpotlightViewProps>& constProps = concreteShadowNode.getConcreteSharedProps();
-    const std::shared_ptr<HybridSpotlightViewProps>& props = std::const_pointer_cast<HybridSpotlightViewProps>(constProps);
-    HybridSpotlightViewState state{props};
-    concreteShadowNode.setStateData(std::move(state));
-  }
-#endif
 
 } // namespace margelo::nitro::spotlight::views

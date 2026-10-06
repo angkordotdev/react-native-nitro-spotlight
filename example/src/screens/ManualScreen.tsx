@@ -76,6 +76,8 @@ export function ManualScreen() {
       <Spotlight
         controls={spotlight}
         {...spotlightProps}
+        enteringAnimation="fade"
+        exitAnimation="fade"
         onBackdropPress={spotlight.clear}
       >
         {spotlight.targetRect ? (

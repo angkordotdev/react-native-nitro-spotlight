@@ -67,41 +67,68 @@ namespace margelo::nitro::spotlight {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* shape */)>("setShape");
     method(_javaPart, shape.has_value() ? jni::make_jstring(shape.value()) : nullptr);
   }
-  std::optional<double> JHybridSpotlightViewSpec::getBorderRadius() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getBorderRadius");
+  std::optional<double> JHybridSpotlightViewSpec::getCornerRadius() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getCornerRadius");
     auto __result = method(_javaPart);
     return __result != nullptr ? std::make_optional(__result->value()) : std::nullopt;
   }
-  void JHybridSpotlightViewSpec::setBorderRadius(std::optional<double> borderRadius) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* borderRadius */)>("setBorderRadius");
-    method(_javaPart, borderRadius.has_value() ? jni::JDouble::valueOf(borderRadius.value()) : nullptr);
+  void JHybridSpotlightViewSpec::setCornerRadius(std::optional<double> cornerRadius) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* cornerRadius */)>("setCornerRadius");
+    method(_javaPart, cornerRadius.has_value() ? jni::JDouble::valueOf(cornerRadius.value()) : nullptr);
   }
-  std::optional<double> JHybridSpotlightViewSpec::getPadding() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getPadding");
+  std::optional<double> JHybridSpotlightViewSpec::getCutoutPadding() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getCutoutPadding");
     auto __result = method(_javaPart);
     return __result != nullptr ? std::make_optional(__result->value()) : std::nullopt;
   }
-  void JHybridSpotlightViewSpec::setPadding(std::optional<double> padding) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* padding */)>("setPadding");
-    method(_javaPart, padding.has_value() ? jni::JDouble::valueOf(padding.value()) : nullptr);
+  void JHybridSpotlightViewSpec::setCutoutPadding(std::optional<double> cutoutPadding) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* cutoutPadding */)>("setCutoutPadding");
+    method(_javaPart, cutoutPadding.has_value() ? jni::JDouble::valueOf(cutoutPadding.value()) : nullptr);
   }
-  std::optional<double> JHybridSpotlightViewSpec::getBorderWidth() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getBorderWidth");
+  std::optional<double> JHybridSpotlightViewSpec::getRingWidth() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getRingWidth");
     auto __result = method(_javaPart);
     return __result != nullptr ? std::make_optional(__result->value()) : std::nullopt;
   }
-  void JHybridSpotlightViewSpec::setBorderWidth(std::optional<double> borderWidth) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* borderWidth */)>("setBorderWidth");
-    method(_javaPart, borderWidth.has_value() ? jni::JDouble::valueOf(borderWidth.value()) : nullptr);
+  void JHybridSpotlightViewSpec::setRingWidth(std::optional<double> ringWidth) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* ringWidth */)>("setRingWidth");
+    method(_javaPart, ringWidth.has_value() ? jni::JDouble::valueOf(ringWidth.value()) : nullptr);
   }
-  std::optional<std::string> JHybridSpotlightViewSpec::getBorderColor() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getBorderColor");
+  std::optional<std::string> JHybridSpotlightViewSpec::getRingColor() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getRingColor");
     auto __result = method(_javaPart);
     return __result != nullptr ? std::make_optional(__result->toStdString()) : std::nullopt;
   }
-  void JHybridSpotlightViewSpec::setBorderColor(const std::optional<std::string>& borderColor) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* borderColor */)>("setBorderColor");
-    method(_javaPart, borderColor.has_value() ? jni::make_jstring(borderColor.value()) : nullptr);
+  void JHybridSpotlightViewSpec::setRingColor(const std::optional<std::string>& ringColor) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* ringColor */)>("setRingColor");
+    method(_javaPart, ringColor.has_value() ? jni::make_jstring(ringColor.value()) : nullptr);
+  }
+  std::optional<std::string> JHybridSpotlightViewSpec::getEnteringAnimation() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getEnteringAnimation");
+    auto __result = method(_javaPart);
+    return __result != nullptr ? std::make_optional(__result->toStdString()) : std::nullopt;
+  }
+  void JHybridSpotlightViewSpec::setEnteringAnimation(const std::optional<std::string>& enteringAnimation) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* enteringAnimation */)>("setEnteringAnimation");
+    method(_javaPart, enteringAnimation.has_value() ? jni::make_jstring(enteringAnimation.value()) : nullptr);
+  }
+  std::optional<std::string> JHybridSpotlightViewSpec::getExitAnimation() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getExitAnimation");
+    auto __result = method(_javaPart);
+    return __result != nullptr ? std::make_optional(__result->toStdString()) : std::nullopt;
+  }
+  void JHybridSpotlightViewSpec::setExitAnimation(const std::optional<std::string>& exitAnimation) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* exitAnimation */)>("setExitAnimation");
+    method(_javaPart, exitAnimation.has_value() ? jni::make_jstring(exitAnimation.value()) : nullptr);
+  }
+  std::optional<double> JHybridSpotlightViewSpec::getExitDurationMs() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JDouble>()>("getExitDurationMs");
+    auto __result = method(_javaPart);
+    return __result != nullptr ? std::make_optional(__result->value()) : std::nullopt;
+  }
+  void JHybridSpotlightViewSpec::setExitDurationMs(std::optional<double> exitDurationMs) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JDouble> /* exitDurationMs */)>("setExitDurationMs");
+    method(_javaPart, exitDurationMs.has_value() ? jni::JDouble::valueOf(exitDurationMs.value()) : nullptr);
   }
   std::optional<bool> JHybridSpotlightViewSpec::getAllowOverlayClick() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JBoolean>()>("getAllowOverlayClick");
@@ -158,6 +185,10 @@ namespace margelo::nitro::spotlight {
   }
   void JHybridSpotlightViewSpec::clear() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("clear");
+    method(_javaPart);
+  }
+  void JHybridSpotlightViewSpec::holdDim() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("holdDim");
     method(_javaPart);
   }
 

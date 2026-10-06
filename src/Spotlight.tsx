@@ -15,6 +15,38 @@ import type { SpotlightControls } from './useSpotlight';
 /** Shape of the cutout hole. */
 export type SpotlightShape = 'rect' | 'circle';
 
+/**
+ * Transition used when the spotlight appears or disappears.
+ * - 'zoom': the cutout grows out of / collapses into the target's centre
+ * - 'fade': the dim layer fades in / out with the cutout in place
+ * - 'none': appears / disappears instantly
+ *
+ * Moving between targets while the spotlight is already showing always
+ * animates the cutout between the two rects.
+ */
+export type SpotlightAnimation = 'zoom' | 'fade' | 'none';
+
+/**
+ * Values sent to native when a prop is omitted. Native uses the same defaults.
+ *
+ * <Spotlight> always passes a concrete value instead of `undefined`: when a JS
+ * prop is removed, React Native sends `null` for it, and Nitro's optional
+ * converters only accept `undefined` — the commit would throw
+ * "SpotlightView.<prop>: Value is null, expected a ...".
+ */
+const DEFAULTS = {
+  dimOpacity: 0.55,
+  shape: 'rect',
+  borderRadius: 12,
+  padding: 6,
+  borderWidth: 1.5,
+  borderColor: '#FFFFFF',
+  enteringAnimation: 'zoom',
+  exitAnimation: 'zoom',
+  exitDurationMs: 200,
+  allowOverlayClick: false,
+} as const;
+
 export interface SpotlightComponentProps {
   /** Controls returned by useSpotlight(). Preferred for app code. */
   controls?: SpotlightControls;
@@ -22,27 +54,39 @@ export interface SpotlightComponentProps {
   /** @deprecated Use controls instead. */
   spotlightRef?: RefObject<SpotlightRef | null>;
 
-  /** Opacity of the dim overlay. Omitted values are not sent to native. */
+  /** Opacity of the dim overlay. Default 0.55. */
   dimOpacity?: number;
 
   /**
    * Shape of the cutout hole.
    * - 'rect' (default): rounded rectangle, respects borderRadius
-   * - 'circle': ellipse inscribed in the target rect, ignores borderRadius
+   * - 'circle': fully rounded (pill/circle) cutout sized to the target rect, ignores borderRadius
    */
   shape?: SpotlightShape;
 
-  /** Border radius of the cutout hole. Ignored when shape is 'circle'. Omitted values are not sent to native. */
+  /** Border radius of the cutout hole. Ignored when shape is 'circle'. Default 12. */
   borderRadius?: number;
 
-  /** Padding around the target rect. Omitted values are not sent to native. */
+  /** Padding around the target rect. Default 6. */
   padding?: number;
 
-  /** Width of the border around the cutout. Set to 0 to remove it. Omitted values are not sent to native. */
+  /** Width of the border around the cutout. Set to 0 to remove it. Default 1.5. */
   borderWidth?: number;
 
-  /** Color of the border around the cutout. Omitted values are not sent to native. */
+  /** Color of the border around the cutout. Default '#FFFFFF'. */
   borderColor?: string;
+
+  /**
+   * Transition when the spotlight first appears (from idle). Default 'zoom'.
+   * Its duration is the `durationMs` passed to highlight().
+   */
+  enteringAnimation?: SpotlightAnimation;
+
+  /** Transition when the spotlight is cleared. Default 'zoom'. */
+  exitAnimation?: SpotlightAnimation;
+
+  /** Duration of the exit animation in milliseconds. Default 200. */
+  exitDurationMs?: number;
 
   /** Whether backdrop taps should pass through to Pressables underneath. onBackdropPress still fires. */
   allowOverlayClick?: boolean;
@@ -106,6 +150,9 @@ export function Spotlight({
   padding,
   borderWidth,
   borderColor,
+  enteringAnimation,
+  exitAnimation,
+  exitDurationMs,
   allowOverlayClick,
   onBackdropPress,
   onTargetLayout,
@@ -168,15 +215,19 @@ export function Spotlight({
     <View style={[styles.overlay, style]} pointerEvents="box-none">
       <SpotlightView
         hybridRef={hybridRefCb}
-        dimOpacity={dimOpacity}
-        shape={shape}
-        borderRadius={borderRadius}
-        padding={padding}
-        borderWidth={borderWidth}
-        borderColor={borderColor}
-        allowOverlayClick={allowOverlayClick}
+        dimOpacity={dimOpacity ?? DEFAULTS.dimOpacity}
+        shape={shape ?? DEFAULTS.shape}
+        cornerRadius={borderRadius ?? DEFAULTS.borderRadius}
+        cutoutPadding={padding ?? DEFAULTS.padding}
+        ringWidth={borderWidth ?? DEFAULTS.borderWidth}
+        ringColor={borderColor ?? DEFAULTS.borderColor}
+        enteringAnimation={enteringAnimation ?? DEFAULTS.enteringAnimation}
+        exitAnimation={exitAnimation ?? DEFAULTS.exitAnimation}
+        exitDurationMs={exitDurationMs ?? DEFAULTS.exitDurationMs}
+        allowOverlayClick={allowOverlayClick ?? DEFAULTS.allowOverlayClick}
         onBackdropPress={onBackdropPressCb}
         onTargetLayout={onTargetLayoutCb}
+        pointerEvents="box-none"
         style={StyleSheet.absoluteFillObject}
       />
       {children}

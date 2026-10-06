@@ -169,11 +169,11 @@ open class HybridSpotlightViewSpec_cxx {
     }
   }
   
-  public final var borderRadius: bridge.std__optional_double_ {
+  public final var cornerRadius: bridge.std__optional_double_ {
     @inline(__always)
     get {
       return { () -> bridge.std__optional_double_ in
-        if let __unwrappedValue = self.__implementation.borderRadius {
+        if let __unwrappedValue = self.__implementation.cornerRadius {
           return bridge.create_std__optional_double_(__unwrappedValue)
         } else {
           return .init()
@@ -182,7 +182,7 @@ open class HybridSpotlightViewSpec_cxx {
     }
     @inline(__always)
     set {
-      self.__implementation.borderRadius = { () -> Double? in
+      self.__implementation.cornerRadius = { () -> Double? in
         if bridge.has_value_std__optional_double_(newValue) {
           let __unwrapped = bridge.get_std__optional_double_(newValue)
           return __unwrapped
@@ -193,11 +193,11 @@ open class HybridSpotlightViewSpec_cxx {
     }
   }
   
-  public final var padding: bridge.std__optional_double_ {
+  public final var cutoutPadding: bridge.std__optional_double_ {
     @inline(__always)
     get {
       return { () -> bridge.std__optional_double_ in
-        if let __unwrappedValue = self.__implementation.padding {
+        if let __unwrappedValue = self.__implementation.cutoutPadding {
           return bridge.create_std__optional_double_(__unwrappedValue)
         } else {
           return .init()
@@ -206,7 +206,7 @@ open class HybridSpotlightViewSpec_cxx {
     }
     @inline(__always)
     set {
-      self.__implementation.padding = { () -> Double? in
+      self.__implementation.cutoutPadding = { () -> Double? in
         if bridge.has_value_std__optional_double_(newValue) {
           let __unwrapped = bridge.get_std__optional_double_(newValue)
           return __unwrapped
@@ -217,11 +217,11 @@ open class HybridSpotlightViewSpec_cxx {
     }
   }
   
-  public final var borderWidth: bridge.std__optional_double_ {
+  public final var ringWidth: bridge.std__optional_double_ {
     @inline(__always)
     get {
       return { () -> bridge.std__optional_double_ in
-        if let __unwrappedValue = self.__implementation.borderWidth {
+        if let __unwrappedValue = self.__implementation.ringWidth {
           return bridge.create_std__optional_double_(__unwrappedValue)
         } else {
           return .init()
@@ -230,7 +230,7 @@ open class HybridSpotlightViewSpec_cxx {
     }
     @inline(__always)
     set {
-      self.__implementation.borderWidth = { () -> Double? in
+      self.__implementation.ringWidth = { () -> Double? in
         if bridge.has_value_std__optional_double_(newValue) {
           let __unwrapped = bridge.get_std__optional_double_(newValue)
           return __unwrapped
@@ -241,11 +241,11 @@ open class HybridSpotlightViewSpec_cxx {
     }
   }
   
-  public final var borderColor: bridge.std__optional_std__string_ {
+  public final var ringColor: bridge.std__optional_std__string_ {
     @inline(__always)
     get {
       return { () -> bridge.std__optional_std__string_ in
-        if let __unwrappedValue = self.__implementation.borderColor {
+        if let __unwrappedValue = self.__implementation.ringColor {
           return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
         } else {
           return .init()
@@ -254,10 +254,82 @@ open class HybridSpotlightViewSpec_cxx {
     }
     @inline(__always)
     set {
-      self.__implementation.borderColor = { () -> String? in
+      self.__implementation.ringColor = { () -> String? in
         if bridge.has_value_std__optional_std__string_(newValue) {
           let __unwrapped = bridge.get_std__optional_std__string_(newValue)
           return String(__unwrapped)
+        } else {
+          return nil
+        }
+      }()
+    }
+  }
+  
+  public final var enteringAnimation: bridge.std__optional_std__string_ {
+    @inline(__always)
+    get {
+      return { () -> bridge.std__optional_std__string_ in
+        if let __unwrappedValue = self.__implementation.enteringAnimation {
+          return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
+        } else {
+          return .init()
+        }
+      }()
+    }
+    @inline(__always)
+    set {
+      self.__implementation.enteringAnimation = { () -> String? in
+        if bridge.has_value_std__optional_std__string_(newValue) {
+          let __unwrapped = bridge.get_std__optional_std__string_(newValue)
+          return String(__unwrapped)
+        } else {
+          return nil
+        }
+      }()
+    }
+  }
+  
+  public final var exitAnimation: bridge.std__optional_std__string_ {
+    @inline(__always)
+    get {
+      return { () -> bridge.std__optional_std__string_ in
+        if let __unwrappedValue = self.__implementation.exitAnimation {
+          return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
+        } else {
+          return .init()
+        }
+      }()
+    }
+    @inline(__always)
+    set {
+      self.__implementation.exitAnimation = { () -> String? in
+        if bridge.has_value_std__optional_std__string_(newValue) {
+          let __unwrapped = bridge.get_std__optional_std__string_(newValue)
+          return String(__unwrapped)
+        } else {
+          return nil
+        }
+      }()
+    }
+  }
+  
+  public final var exitDurationMs: bridge.std__optional_double_ {
+    @inline(__always)
+    get {
+      return { () -> bridge.std__optional_double_ in
+        if let __unwrappedValue = self.__implementation.exitDurationMs {
+          return bridge.create_std__optional_double_(__unwrappedValue)
+        } else {
+          return .init()
+        }
+      }()
+    }
+    @inline(__always)
+    set {
+      self.__implementation.exitDurationMs = { () -> Double? in
+        if bridge.has_value_std__optional_double_(newValue) {
+          let __unwrapped = bridge.get_std__optional_double_(newValue)
+          return __unwrapped
         } else {
           return nil
         }
@@ -380,6 +452,17 @@ open class HybridSpotlightViewSpec_cxx {
   public final func clear() -> bridge.Result_void_ {
     do {
       try self.__implementation.clear()
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func holdDim() -> bridge.Result_void_ {
+    do {
+      try self.__implementation.holdDim()
       return bridge.create_Result_void_()
     } catch (let __error) {
       let __exceptionPtr = __error.toCpp()

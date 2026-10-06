@@ -52,14 +52,20 @@ namespace margelo::nitro::spotlight {
       virtual void setDimOpacity(std::optional<double> dimOpacity) = 0;
       virtual std::optional<std::string> getShape() = 0;
       virtual void setShape(const std::optional<std::string>& shape) = 0;
-      virtual std::optional<double> getBorderRadius() = 0;
-      virtual void setBorderRadius(std::optional<double> borderRadius) = 0;
-      virtual std::optional<double> getPadding() = 0;
-      virtual void setPadding(std::optional<double> padding) = 0;
-      virtual std::optional<double> getBorderWidth() = 0;
-      virtual void setBorderWidth(std::optional<double> borderWidth) = 0;
-      virtual std::optional<std::string> getBorderColor() = 0;
-      virtual void setBorderColor(const std::optional<std::string>& borderColor) = 0;
+      virtual std::optional<double> getCornerRadius() = 0;
+      virtual void setCornerRadius(std::optional<double> cornerRadius) = 0;
+      virtual std::optional<double> getCutoutPadding() = 0;
+      virtual void setCutoutPadding(std::optional<double> cutoutPadding) = 0;
+      virtual std::optional<double> getRingWidth() = 0;
+      virtual void setRingWidth(std::optional<double> ringWidth) = 0;
+      virtual std::optional<std::string> getRingColor() = 0;
+      virtual void setRingColor(const std::optional<std::string>& ringColor) = 0;
+      virtual std::optional<std::string> getEnteringAnimation() = 0;
+      virtual void setEnteringAnimation(const std::optional<std::string>& enteringAnimation) = 0;
+      virtual std::optional<std::string> getExitAnimation() = 0;
+      virtual void setExitAnimation(const std::optional<std::string>& exitAnimation) = 0;
+      virtual std::optional<double> getExitDurationMs() = 0;
+      virtual void setExitDurationMs(std::optional<double> exitDurationMs) = 0;
       virtual std::optional<bool> getAllowOverlayClick() = 0;
       virtual void setAllowOverlayClick(std::optional<bool> allowOverlayClick) = 0;
       virtual std::optional<std::function<void(const Rect& /* rect */)>> getOnTargetLayout() = 0;
@@ -72,6 +78,7 @@ namespace margelo::nitro::spotlight {
       virtual void highlight(double x, double y, double width, double height) = 0;
       virtual void highlightAnimated(double x, double y, double width, double height, double durationMs) = 0;
       virtual void clear() = 0;
+      virtual void holdDim() = 0;
 
     protected:
       // Hybrid Setup

@@ -54,14 +54,20 @@ namespace margelo::nitro::spotlight {
     void setDimOpacity(std::optional<double> dimOpacity) override;
     std::optional<std::string> getShape() override;
     void setShape(const std::optional<std::string>& shape) override;
-    std::optional<double> getBorderRadius() override;
-    void setBorderRadius(std::optional<double> borderRadius) override;
-    std::optional<double> getPadding() override;
-    void setPadding(std::optional<double> padding) override;
-    std::optional<double> getBorderWidth() override;
-    void setBorderWidth(std::optional<double> borderWidth) override;
-    std::optional<std::string> getBorderColor() override;
-    void setBorderColor(const std::optional<std::string>& borderColor) override;
+    std::optional<double> getCornerRadius() override;
+    void setCornerRadius(std::optional<double> cornerRadius) override;
+    std::optional<double> getCutoutPadding() override;
+    void setCutoutPadding(std::optional<double> cutoutPadding) override;
+    std::optional<double> getRingWidth() override;
+    void setRingWidth(std::optional<double> ringWidth) override;
+    std::optional<std::string> getRingColor() override;
+    void setRingColor(const std::optional<std::string>& ringColor) override;
+    std::optional<std::string> getEnteringAnimation() override;
+    void setEnteringAnimation(const std::optional<std::string>& enteringAnimation) override;
+    std::optional<std::string> getExitAnimation() override;
+    void setExitAnimation(const std::optional<std::string>& exitAnimation) override;
+    std::optional<double> getExitDurationMs() override;
+    void setExitDurationMs(std::optional<double> exitDurationMs) override;
     std::optional<bool> getAllowOverlayClick() override;
     void setAllowOverlayClick(std::optional<bool> allowOverlayClick) override;
     std::optional<std::function<void(const Rect& /* rect */)>> getOnTargetLayout() override;
@@ -74,6 +80,7 @@ namespace margelo::nitro::spotlight {
     void highlight(double x, double y, double width, double height) override;
     void highlightAnimated(double x, double y, double width, double height, double durationMs) override;
     void clear() override;
+    void holdDim() override;
 
   private:
     jni::global_ref<JHybridSpotlightViewSpec::JavaPart> _javaPart;

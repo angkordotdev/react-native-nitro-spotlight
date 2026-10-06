@@ -7,14 +7,15 @@
 
 #pragma once
 
-#include <optional>
-#include <NitroModules/NitroDefines.hpp>
-#include <NitroModules/NitroHash.hpp>
-#include <NitroModules/CachedProp.hpp>
-#include <react/renderer/core/ConcreteComponentDescriptor.h>
-#include <react/renderer/core/PropsParserContext.h>
+#include <NitroModules/ReactProp.hpp>
+#include <NitroModules/ViewComponentDescriptor.hpp>
+#include <NitroModules/ViewPropsHolderState.hpp>
 #include <react/renderer/components/view/ConcreteViewShadowNode.h>
 #include <react/renderer/components/view/ViewProps.h>
+#include <react/renderer/core/PropsParserContext.h>
+#include <react/renderer/core/RawProps.h>
+
+#include <string>
 
 #include <optional>
 #include <string>
@@ -43,16 +44,53 @@ namespace margelo::nitro::spotlight::views {
                              const react::RawProps& rawProps);
 
   public:
-    CachedProp<std::optional<double>> dimOpacity;
-    CachedProp<std::optional<std::string>> shape;
-    CachedProp<std::optional<double>> borderRadius;
-    CachedProp<std::optional<double>> padding;
-    CachedProp<std::optional<double>> borderWidth;
-    CachedProp<std::optional<std::string>> borderColor;
-    CachedProp<std::optional<bool>> allowOverlayClick;
-    CachedProp<std::optional<std::function<void(const Rect& /* rect */)>>> onTargetLayout;
-    CachedProp<std::optional<std::function<void()>>> onBackdropPress;
-    CachedProp<std::optional<std::function<void(const std::shared_ptr<HybridSpotlightViewSpec>& /* ref */)>>> hybridRef;
+    nitro::ReactProp<std::optional<double>> dimOpacity;
+    nitro::ReactProp<std::optional<std::string>> shape;
+    nitro::ReactProp<std::optional<double>> cornerRadius;
+    nitro::ReactProp<std::optional<double>> cutoutPadding;
+    nitro::ReactProp<std::optional<double>> ringWidth;
+    nitro::ReactProp<std::optional<std::string>> ringColor;
+    nitro::ReactProp<std::optional<std::string>> enteringAnimation;
+    nitro::ReactProp<std::optional<std::string>> exitAnimation;
+    nitro::ReactProp<std::optional<double>> exitDurationMs;
+    nitro::ReactProp<std::optional<bool>> allowOverlayClick;
+    nitro::ReactProp<std::optional<std::function<void(const Rect& /* rect */)>>> onTargetLayout;
+    nitro::ReactProp<std::optional<std::function<void()>>> onBackdropPress;
+    nitro::ReactProp<std::optional<std::function<void(const std::shared_ptr<HybridSpotlightViewSpec>& /* ref */)>>> hybridRef;
+
+    [[nodiscard]]
+    bool hasSameProps(const HybridSpotlightViewProps& other) const noexcept {
+      return dimOpacity.hasSameValue(other.dimOpacity) &&
+             shape.hasSameValue(other.shape) &&
+             cornerRadius.hasSameValue(other.cornerRadius) &&
+             cutoutPadding.hasSameValue(other.cutoutPadding) &&
+             ringWidth.hasSameValue(other.ringWidth) &&
+             ringColor.hasSameValue(other.ringColor) &&
+             enteringAnimation.hasSameValue(other.enteringAnimation) &&
+             exitAnimation.hasSameValue(other.exitAnimation) &&
+             exitDurationMs.hasSameValue(other.exitDurationMs) &&
+             allowOverlayClick.hasSameValue(other.allowOverlayClick) &&
+             onTargetLayout.hasSameValue(other.onTargetLayout) &&
+             onBackdropPress.hasSameValue(other.onBackdropPress) &&
+             hybridRef.hasSameValue(other.hybridRef);
+    }
+
+    [[nodiscard]]
+    bool hasAnyProvidedProps() const noexcept {
+      return dimOpacity.isProvided() ||
+             shape.isProvided() ||
+             cornerRadius.isProvided() ||
+             cutoutPadding.isProvided() ||
+             ringWidth.isProvided() ||
+             ringColor.isProvided() ||
+             enteringAnimation.isProvided() ||
+             exitAnimation.isProvided() ||
+             exitDurationMs.isProvided() ||
+             allowOverlayClick.isProvided() ||
+             onTargetLayout.isProvided() ||
+             onBackdropPress.isProvided() ||
+             hybridRef.isProvided();
+    }
 
   private:
     static bool filterObjectKeys(const std::string& propName);
@@ -61,32 +99,7 @@ namespace margelo::nitro::spotlight::views {
   /**
    * State for the "SpotlightView" View.
    */
-  class HybridSpotlightViewState final {
-  public:
-    HybridSpotlightViewState() = default;
-    explicit HybridSpotlightViewState(const std::shared_ptr<HybridSpotlightViewProps>& props):
-      _props(props) {}
-
-  public:
-    [[nodiscard]]
-    const std::shared_ptr<HybridSpotlightViewProps>& getProps() const {
-      return _props;
-    }
-
-  public:
-#ifdef ANDROID
-  HybridSpotlightViewState(const HybridSpotlightViewState& /* previousState */, folly::dynamic /* data */) {}
-  folly::dynamic getDynamic() const {
-    throw std::runtime_error("HybridSpotlightViewState does not support folly!");
-  }
-  react::MapBuffer getMapBuffer() const {
-    throw std::runtime_error("HybridSpotlightViewState does not support MapBuffer!");
-  };
-#endif
-
-  private:
-    std::shared_ptr<HybridSpotlightViewProps> _props;
-  };
+  using HybridSpotlightViewState = nitro::ViewPropsHolderState<HybridSpotlightViewProps>;
 
   /**
    * The Shadow Node for the "SpotlightView" View.
@@ -99,21 +112,7 @@ namespace margelo::nitro::spotlight::views {
   /**
    * The Component Descriptor for the "SpotlightView" View.
    */
-  class HybridSpotlightViewComponentDescriptor final: public react::ConcreteComponentDescriptor<HybridSpotlightViewShadowNode> {
-  public:
-    explicit HybridSpotlightViewComponentDescriptor(const react::ComponentDescriptorParameters& parameters);
-
-  public:
-    /**
-     * A faster path for cloning props - reuses the caching logic from `HybridSpotlightViewProps`.
-     */
-    std::shared_ptr<const react::Props> cloneProps(const react::PropsParserContext& context,
-                                                   const std::shared_ptr<const react::Props>& props,
-                                                   react::RawProps rawProps) const override;
-#ifdef ANDROID
-    void adopt(react::ShadowNode& shadowNode) const override;
-#endif
-  };
+  using HybridSpotlightViewComponentDescriptor = nitro::ViewComponentDescriptor<HybridSpotlightViewShadowNode>;
 
   /* The actual view for "SpotlightView" needs to be implemented in platform-specific code. */
 

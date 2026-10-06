@@ -37,6 +37,7 @@ using namespace margelo::nitro::spotlight::views;
 
 @implementation HybridSpotlightViewComponent {
   std::shared_ptr<HybridSpotlightViewSpecSwift> _hybridView;
+  BOOL _didDropView;
 }
 
 + (void) load {
@@ -50,6 +51,7 @@ using namespace margelo::nitro::spotlight::views;
 
 - (instancetype) init {
   if (self = [super init]) {
+    _props = HybridSpotlightViewShadowNode::defaultSharedProps();
     std::shared_ptr<HybridSpotlightViewSpec> hybridView = Spotlight::SpotlightAutolinking::createSpotlightView();
     _hybridView = std::dynamic_pointer_cast<HybridSpotlightViewSpecSwift>(hybridView);
     [self updateView];
@@ -69,75 +71,121 @@ using namespace margelo::nitro::spotlight::views;
   [self setContentView:view];
 }
 
+- (void) notifyOnDropView {
+  // A recycled component can later be invalidated. Notify only once per mount.
+  if (_didDropView) {
+    return;
+  }
+  Spotlight::HybridSpotlightViewSpec_cxx& swiftPart = _hybridView->getSwiftPart();
+  swiftPart.onDropView();
+  _didDropView = YES;
+}
+
 - (void) updateProps:(const std::shared_ptr<const react::Props>&)props
             oldProps:(const std::shared_ptr<const react::Props>&)oldProps {
+  // A props update marks a newly mounted or still-active component.
+  _didDropView = NO;
+
   // 1. Downcast props
-  const auto& newViewPropsConst = *std::static_pointer_cast<HybridSpotlightViewProps const>(props);
-  auto& newViewProps = const_cast<HybridSpotlightViewProps&>(newViewPropsConst);
+  const auto& newViewProps = *std::static_pointer_cast<const HybridSpotlightViewProps>(props);
+  const auto* oldViewProps = static_cast<const HybridSpotlightViewProps*>(oldProps.get());
   Spotlight::HybridSpotlightViewSpec_cxx& swiftPart = _hybridView->getSwiftPart();
 
-  // 2. Update each prop individually
-  swiftPart.beforeUpdate();
+  // 2. Update only props that differ from the previous Props snapshot.
+  const bool hasTransactionPropChanges = oldViewProps == nullptr
+      ? newViewProps.hasAnyProvidedProps()
+      : !newViewProps.hasSameProps(*oldViewProps);
+  if (hasTransactionPropChanges) {
+    swiftPart.beforeUpdate();
 
-  // dimOpacity: optional
-  if (newViewProps.dimOpacity.isDirty) {
-    swiftPart.setDimOpacity(newViewProps.dimOpacity.value);
-    newViewProps.dimOpacity.isDirty = false;
-  }
-  // shape: optional
-  if (newViewProps.shape.isDirty) {
-    swiftPart.setShape(newViewProps.shape.value);
-    newViewProps.shape.isDirty = false;
-  }
-  // borderRadius: optional
-  if (newViewProps.borderRadius.isDirty) {
-    swiftPart.setBorderRadius(newViewProps.borderRadius.value);
-    newViewProps.borderRadius.isDirty = false;
-  }
-  // padding: optional
-  if (newViewProps.padding.isDirty) {
-    swiftPart.setPadding(newViewProps.padding.value);
-    newViewProps.padding.isDirty = false;
-  }
-  // borderWidth: optional
-  if (newViewProps.borderWidth.isDirty) {
-    swiftPart.setBorderWidth(newViewProps.borderWidth.value);
-    newViewProps.borderWidth.isDirty = false;
-  }
-  // borderColor: optional
-  if (newViewProps.borderColor.isDirty) {
-    swiftPart.setBorderColor(newViewProps.borderColor.value);
-    newViewProps.borderColor.isDirty = false;
-  }
-  // allowOverlayClick: optional
-  if (newViewProps.allowOverlayClick.isDirty) {
-    swiftPart.setAllowOverlayClick(newViewProps.allowOverlayClick.value);
-    newViewProps.allowOverlayClick.isDirty = false;
-  }
-  // onTargetLayout: optional
-  if (newViewProps.onTargetLayout.isDirty) {
-    swiftPart.setOnTargetLayout(newViewProps.onTargetLayout.value);
-    newViewProps.onTargetLayout.isDirty = false;
-  }
-  // onBackdropPress: optional
-  if (newViewProps.onBackdropPress.isDirty) {
-    swiftPart.setOnBackdropPress(newViewProps.onBackdropPress.value);
-    newViewProps.onBackdropPress.isDirty = false;
-  }
-
-  swiftPart.afterUpdate();
-
-  // 3. Update hybridRef if it changed
-  if (newViewProps.hybridRef.isDirty) {
-    // hybridRef changed - call it with new this
-    const auto& maybeFunc = newViewProps.hybridRef.value;
-    if (maybeFunc.has_value()) {
-      maybeFunc.value()(_hybridView);
+    // dimOpacity: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.dimOpacity.isProvided()
+          : !newViewProps.dimOpacity.hasSameValue(oldViewProps->dimOpacity)) {
+      swiftPart.setDimOpacity(newViewProps.dimOpacity.get());
     }
-    newViewProps.hybridRef.isDirty = false;
+    // shape: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.shape.isProvided()
+          : !newViewProps.shape.hasSameValue(oldViewProps->shape)) {
+      swiftPart.setShape(newViewProps.shape.get());
+    }
+    // cornerRadius: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.cornerRadius.isProvided()
+          : !newViewProps.cornerRadius.hasSameValue(oldViewProps->cornerRadius)) {
+      swiftPart.setCornerRadius(newViewProps.cornerRadius.get());
+    }
+    // cutoutPadding: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.cutoutPadding.isProvided()
+          : !newViewProps.cutoutPadding.hasSameValue(oldViewProps->cutoutPadding)) {
+      swiftPart.setCutoutPadding(newViewProps.cutoutPadding.get());
+    }
+    // ringWidth: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.ringWidth.isProvided()
+          : !newViewProps.ringWidth.hasSameValue(oldViewProps->ringWidth)) {
+      swiftPart.setRingWidth(newViewProps.ringWidth.get());
+    }
+    // ringColor: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.ringColor.isProvided()
+          : !newViewProps.ringColor.hasSameValue(oldViewProps->ringColor)) {
+      swiftPart.setRingColor(newViewProps.ringColor.get());
+    }
+    // enteringAnimation: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.enteringAnimation.isProvided()
+          : !newViewProps.enteringAnimation.hasSameValue(oldViewProps->enteringAnimation)) {
+      swiftPart.setEnteringAnimation(newViewProps.enteringAnimation.get());
+    }
+    // exitAnimation: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.exitAnimation.isProvided()
+          : !newViewProps.exitAnimation.hasSameValue(oldViewProps->exitAnimation)) {
+      swiftPart.setExitAnimation(newViewProps.exitAnimation.get());
+    }
+    // exitDurationMs: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.exitDurationMs.isProvided()
+          : !newViewProps.exitDurationMs.hasSameValue(oldViewProps->exitDurationMs)) {
+      swiftPart.setExitDurationMs(newViewProps.exitDurationMs.get());
+    }
+    // allowOverlayClick: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.allowOverlayClick.isProvided()
+          : !newViewProps.allowOverlayClick.hasSameValue(oldViewProps->allowOverlayClick)) {
+      swiftPart.setAllowOverlayClick(newViewProps.allowOverlayClick.get());
+    }
+    // onTargetLayout: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.onTargetLayout.isProvided()
+          : !newViewProps.onTargetLayout.hasSameValue(oldViewProps->onTargetLayout)) {
+      swiftPart.setOnTargetLayout(newViewProps.onTargetLayout.get());
+    }
+    // onBackdropPress: optional
+    if (oldViewProps == nullptr
+          ? newViewProps.onBackdropPress.isProvided()
+          : !newViewProps.onBackdropPress.hasSameValue(oldViewProps->onBackdropPress)) {
+      swiftPart.setOnBackdropPress(newViewProps.onBackdropPress.get());
+    }
+
+    // Update hybridRef if it changed
+    if (oldViewProps == nullptr
+          ? newViewProps.hybridRef.isProvided()
+          : !newViewProps.hybridRef.hasSameValue(oldViewProps->hybridRef)) {
+      // hybridRef changed - call it with new this
+      const auto& maybeFunc = newViewProps.hybridRef.get();
+      if (maybeFunc.has_value()) {
+        maybeFunc.value()(_hybridView);
+      }
+    }
+
+    swiftPart.afterUpdate();
   }
 
-  // 4. Continue in base class
+  // 3. Continue in base class
   [super updateProps:props oldProps:oldProps];
 }
 
@@ -146,6 +194,7 @@ using namespace margelo::nitro::spotlight::views;
 }
 
 - (void)prepareForRecycle {
+  [self notifyOnDropView];
   [super prepareForRecycle];
   Spotlight::HybridSpotlightViewSpec_cxx& swiftPart = _hybridView->getSwiftPart();
   swiftPart.maybePrepareForRecycle();
@@ -153,8 +202,7 @@ using namespace margelo::nitro::spotlight::views;
 
 #ifdef ENABLE_RCT_COMPONENT_VIEW_INVALIDATE
 - (void)invalidate {
-  Spotlight::HybridSpotlightViewSpec_cxx& swiftPart = _hybridView->getSwiftPart();
-  swiftPart.onDropView();
+  [self notifyOnDropView];
   [super invalidate];
 }
 #endif

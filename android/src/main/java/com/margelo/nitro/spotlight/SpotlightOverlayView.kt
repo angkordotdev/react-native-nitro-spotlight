@@ -13,13 +13,22 @@ import android.graphics.Region
 import android.os.Trace
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import com.facebook.react.uimanager.PointerEvents
+import com.facebook.react.uimanager.ReactPointerEventsView
 import com.facebook.react.uimanager.ThemedReactContext
+import com.facebook.react.uimanager.events.NativeGestureUtil
+import kotlin.math.abs
+
+internal const val TRANSITION_ZOOM = "zoom"
+internal const val TRANSITION_FADE = "fade"
+internal const val TRANSITION_NONE = "none"
 
 internal class SpotlightOverlayView(
   context: Context,
-) : FrameLayout(context) {
+) : FrameLayout(context), ReactPointerEventsView {
 
   // -------------------------------------------------------------------------
   // Public properties
@@ -75,12 +84,31 @@ internal class SpotlightOverlayView(
 
   var allowOverlayClick: Boolean = false
     set(value) {
-      if (field == value) return
       field = value
-      rebuildHolePath()
     }
 
+  /** How the spotlight appears from idle: "zoom" (default), "fade" or "none". */
+  var enteringAnimation: String = TRANSITION_ZOOM
+
+  /** How the spotlight disappears on clear(): "zoom" (default), "fade" or "none". */
+  var exitAnimation: String = TRANSITION_ZOOM
+
   var onBackdropPress: (() -> Unit)? = null
+
+  /**
+   * Invoked after a layout pass moved/resized this view while a highlight is
+   * active (first layout, rotation, reparent) so the owner can re-emit a
+   * corrected target rect to JS and refresh anything anchored to our origin.
+   */
+  var onGeometryChanged: (() -> Unit)? = null
+
+  /**
+   * JS must never pick this view as the touch target: the RN touch dispatcher
+   * resolves its target geometrically (before native dispatch), so with AUTO
+   * the full-size overlay would swallow every JS touch, including ones inside
+   * the cutout. Blocking is done natively in dispatchTouchEvent instead.
+   */
+  override val pointerEvents: PointerEvents = PointerEvents.BOX_NONE
 
   // -------------------------------------------------------------------------
   // Drawing
@@ -122,6 +150,8 @@ internal class SpotlightOverlayView(
     fillType = Path.FillType.EVEN_ODD
   }
   private val holePath = Path()
+  // Hit-test region — built lazily on ACTION_DOWN from the final hole path
+  // instead of on every animation frame.
   private val holeRegion = Region()
   private val holeClipRegion = Region()
   private val holeRegionBounds = Rect()
@@ -133,19 +163,32 @@ internal class SpotlightOverlayView(
 
   private var activeAnimator: ValueAnimator? = null
 
+  /**
+   * True while the dim is held with no cutout (see holdDim()): the dim keeps
+   * covering and blocking touches until the next highlight or clear().
+   */
+  private var held = false
+
+  // Fade runs on the view's own alpha (the overlay has no drawn children — the
+  // tooltip is a JS sibling), independent of the path animator so a fade-in can
+  // overlap a cutout morph.
+  private var fadeAnimator: ValueAnimator? = null
+
   // -------------------------------------------------------------------------
   // Touch state
   // -------------------------------------------------------------------------
 
   private var blockingTouch = false
+  private var downX = 0f
+  private var downY = 0f
+  private var touchMoved = false
+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
   // -------------------------------------------------------------------------
   // Display-metric cache (refreshed in onLayout)
   // -------------------------------------------------------------------------
 
   private var cachedDensity: Float = resources.displayMetrics.density
-  private var cachedScreenW: Float = resources.displayMetrics.widthPixels.toFloat()
-  private var cachedScreenH: Float = resources.displayMetrics.heightPixels.toFloat()
 
   // True when this overlay lives in a dialog/sheet window (different window
   // token from the host activity). Refreshed once per highlight in
@@ -164,6 +207,49 @@ internal class SpotlightOverlayView(
   // Init
   // -------------------------------------------------------------------------
 
+  /**
+   * Fabric can size the Nitro host view from its own props (padding/border)
+   * rather than the JS `style`, leaving a thin strip. The overlay must always
+   * cover its parent (the <Spotlight> wrapper) for the dim and for touch
+   * blocking to work, so mirror the parent's size whenever it changes.
+   */
+  private val parentLayoutListener = OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+    fitToParent()
+  }
+
+  /**
+   * True when the overlay was sized from a real (non-zero) parent. False when
+   * the parent is zero-sized — e.g. react-native-screens' FullWindowOverlay,
+   * which on Android is a plain style-less <View> — and we fell back to the
+   * window size. Anything that assumes the overlay sits at the top of the
+   * React content (the header dim strip) must not trust our position then.
+   */
+  var isFittedToParent = false
+    private set
+
+  private fun fitToParent() {
+    val p = parent as? View ?: return
+    val w: Int
+    val h: Int
+    if (p.width > 0 && p.height > 0) {
+      w = p.width
+      h = p.height
+      isFittedToParent = true
+    } else {
+      // Zero-sized parent: it still doesn't clip (overflow: visible), so size
+      // ourselves to the window and the dim/cutout draws correctly. Touches
+      // can't be blocked outside a zero-size parent's bounds, though.
+      val root = rootView
+      w = root.width
+      h = root.height
+      isFittedToParent = false
+      if (w <= 0 || h <= 0) return
+    }
+    if (left != 0 || top != 0 || width != w || height != h) {
+      layout(0, 0, w, h)
+    }
+  }
+
   init {
     // FrameLayout/ViewGroup defaults to WILL_NOT_DRAW when it has no
     // background. We draw the dim overlay in onDraw(), so opt in explicitly.
@@ -173,6 +259,10 @@ internal class SpotlightOverlayView(
     isFocusable = false
     isFocusableInTouchMode = false
     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+
+    // Fabric lays this view out itself (View.layout is final), so correct its
+    // bounds after the fact whenever they differ from the parent's.
+    addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitToParent() }
   }
 
   // -------------------------------------------------------------------------
@@ -194,7 +284,7 @@ internal class SpotlightOverlayView(
 
     val nextWindowRectDp = RectF(xDp, yDp, xDp + widthDp, yDp + heightDp)
 
-    if (animated && activeAnimator?.isRunning == true && windowRectDp.approximatelyEquals(nextWindowRectDp)) {
+    if (animated && isAnimating() && windowRectDp.approximatelyEquals(nextWindowRectDp)) {
       return
     }
 
@@ -214,43 +304,148 @@ internal class SpotlightOverlayView(
 
     targetLocalPx.set(windowDpToLocalPx(windowRectDp))
 
-    if (!animated || durationMs <= 0L) {
+    // Opening a cutout out of a held dim is never a fade (the dim is already
+    // there): the hole zooms open, or snaps when the transition is 'none'.
+    val fromHeld = held
+    val entering = currentLocalPx.isEmpty && !fromHeld
+    // Resume point if this interrupts a fade-out (alpha < 1).
+    val resumeAlpha = alpha
+
+    if (!animated || durationMs <= 0L ||
+      ((entering || fromHeld) && enteringAnimation == TRANSITION_NONE)
+    ) {
       cancelAnimation()
+      held = false
       currentLocalPx.set(targetLocalPx)
       rebuildHolePath()
       invalidate()
       return
     }
 
+    if (entering && enteringAnimation == TRANSITION_FADE) {
+      cancelAnimation()
+      currentLocalPx.set(targetLocalPx)
+      rebuildHolePath()
+      alpha = 0f
+      invalidate()
+      fadeTo(1f, durationMs)
+      return
+    }
+
     animateTo(targetLocalPx, durationMs)
+    if (resumeAlpha < 1f || fadeAnimator?.isRunning == true) {
+      // A new highlight interrupted a fade-out: bring the dim back while the
+      // cutout morphs to the new target.
+      alpha = resumeAlpha
+      fadeTo(1f, durationMs)
+    }
   }
 
   fun clear(durationMs: Long = 200L, onFinished: (() -> Unit)? = null) {
-    if (windowRectDp.isEmpty && activeAnimator?.isRunning == true) {
+    if (windowRectDp.isEmpty && isAnimating()) {
       return
     }
 
     windowRectDp.setEmpty()
 
-    if (durationMs <= 0L || currentLocalPx.isEmpty) {
-      cancelAnimation()
-      currentLocalPx.setEmpty()
-      targetLocalPx.setEmpty()
-      overlayPath.reset()
-      holePath.reset()
-      holeRegion.setEmpty()
+    if (held && currentLocalPx.isEmpty && durationMs > 0L && exitAnimation != TRANSITION_NONE) {
+      // Dismiss a held dim with a fade. `held` stays true until the fade ends
+      // (resetState) so the dim keeps drawing while it fades.
+      fadeTo(0f, durationMs) {
+        resetState()
+        invalidate()
+        onFinished?.invoke()
+      }
+      return
+    }
+
+    if (durationMs <= 0L || currentLocalPx.isEmpty || exitAnimation == TRANSITION_NONE) {
+      resetState()
       invalidate()
       onFinished?.invoke()
       return
     }
 
-    // Snapshot geometry once before the collapse animation starts.
+    // Snapshot geometry once before the exit animation starts.
     refreshGeometryCache()
 
+    if (exitAnimation == TRANSITION_FADE) {
+      // Keep the hole where it is and fade the whole overlay out.
+      cancelPathAnimation()
+      fadeTo(0f, durationMs) {
+        resetState()
+        invalidate()
+        onFinished?.invoke()
+      }
+      return
+    }
+
+    fadeAnimator?.cancel()
+    fadeAnimator = null
+    alpha = 1f
     val centerX = currentLocalPx.centerX()
     val centerY = currentLocalPx.centerY()
     animateTo(RectF(centerX, centerY, centerX, centerY), durationMs, onFinished)
   }
+
+  /**
+   * Collapse the cutout into its centre but keep the full-screen dim and touch
+   * blocking up, so the dim never blinks off (e.g. across a screen change). The
+   * next setHighlight() opens a cutout from the held dim; clear() fades it out.
+   */
+  fun holdDim(durationMs: Long = 200L) {
+    if (held && currentLocalPx.isEmpty) return
+    windowRectDp.setEmpty()
+    held = true
+
+    if (currentLocalPx.isEmpty) {
+      // Nothing was showing: bring the plain dim in with a fade.
+      cancelAnimation()
+      showHeldDim()
+      if (durationMs > 0L) {
+        alpha = 0f
+        fadeTo(1f, durationMs)
+      }
+      return
+    }
+
+    if (durationMs <= 0L || exitAnimation == TRANSITION_NONE) {
+      cancelAnimation()
+      currentLocalPx.setEmpty()
+      targetLocalPx.setEmpty()
+      holePath.reset()
+      showHeldDim()
+      return
+    }
+
+    refreshGeometryCache()
+    fadeAnimator?.cancel()
+    fadeAnimator = null
+    alpha = 1f
+    val centerX = currentLocalPx.centerX()
+    val centerY = currentLocalPx.centerY()
+    // The animator's end handler leaves the plain dim (see enterHeldDim()).
+    animateTo(RectF(centerX, centerY, centerX, centerY), durationMs)
+  }
+
+  private fun showHeldDim() {
+    overlayPath.reset()
+    overlayPath.fillType = Path.FillType.EVEN_ODD
+    overlayPath.addPath(outerRectPath)
+    invalidate()
+  }
+
+  private fun resetState() {
+    held = false
+    cancelAnimation()
+    currentLocalPx.setEmpty()
+    targetLocalPx.setEmpty()
+    overlayPath.reset()
+    holePath.reset()
+  }
+
+  private fun isAnimating(): Boolean =
+    activeAnimator?.isRunning == true || fadeAnimator?.isRunning == true
 
   // -------------------------------------------------------------------------
   // Layout
@@ -259,12 +454,10 @@ internal class SpotlightOverlayView(
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
     super.onLayout(changed, left, top, right, bottom)
 
-    // Refresh cheap display-metric cache whenever the view is re-laid-out
+    // Refresh the cheap density cache whenever the view is re-laid-out
     // (rotation, window resize, density change). The geometry cache
-    // (overlay origin, visible frame, outer rect) is refreshed per highlight.
+    // (overlay origin, visible frame) is refreshed per highlight.
     cachedDensity = resources.displayMetrics.density
-    cachedScreenW = resources.displayMetrics.widthPixels.toFloat()
-    cachedScreenH = resources.displayMetrics.heightPixels.toFloat()
 
     if (changed && !windowRectDp.isEmpty) {
       refreshGeometryCache()
@@ -273,7 +466,16 @@ internal class SpotlightOverlayView(
       currentLocalPx.set(targetLocalPx)
       rebuildHolePath()
       invalidate()
+      onGeometryChanged?.invoke()
     }
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    (parent as? View)?.addOnLayoutChangeListener(parentLayoutListener)
+    // Neither listener fires for layout that already happened before attach.
+    fitToParent()
+    post { fitToParent() }
   }
 
   // -------------------------------------------------------------------------
@@ -281,6 +483,7 @@ internal class SpotlightOverlayView(
   // -------------------------------------------------------------------------
 
   override fun onDetachedFromWindow() {
+    (parent as? View)?.removeOnLayoutChangeListener(parentLayoutListener)
     cancelAnimation()
     super.onDetachedFromWindow()
   }
@@ -322,26 +525,43 @@ internal class SpotlightOverlayView(
       MotionEvent.ACTION_DOWN -> {
         val isBackdropTouch = !isTouchInsideHole(event.x.toInt(), event.y.toInt())
 
-        if (allowOverlayClick && isBackdropTouch) {
-          onBackdropPress?.invoke()
+        if (allowOverlayClick) {
+          // Pass-through: the gesture belongs to whatever is underneath, but
+          // onBackdropPress still fires (once, on DOWN) for backdrop touches.
+          if (isBackdropTouch) onBackdropPress?.invoke()
+          blockingTouch = false
+        } else {
+          blockingTouch = isBackdropTouch
+          if (blockingTouch) {
+            downX = event.x
+            downY = event.y
+            touchMoved = false
+            // JS already started a touch on the view underneath (the RN touch
+            // dispatcher runs before native dispatch). Cancel it so blocked
+            // backdrop taps don't also press JS views below the dim.
+            NativeGestureUtil.notifyNativeGestureStarted(this, event)
+          }
         }
-
-        blockingTouch = !allowOverlayClick && isBackdropTouch
-        // Return false for hole touches, and for all touches when allowOverlayClick
-        // is true, so Android continues hit-testing and delivers the gesture to
-        // RN underneath. onBackdropPress still fires for backdrop touches even
-        // in pass-through mode.
+        // Returning false for cutout touches (and in pass-through mode) lets
+        // Android continue hit-testing to the views underneath.
+        blockingTouch
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (blockingTouch && !touchMoved &&
+          (abs(event.x - downX) > touchSlop || abs(event.y - downY) > touchSlop)
+        ) {
+          touchMoved = true
+        }
         blockingTouch
       }
       MotionEvent.ACTION_UP -> {
         val wasBlocking = blockingTouch
         blockingTouch = false
-        if (wasBlocking) {
+        if (wasBlocking && !touchMoved && !isTouchInsideHole(event.x.toInt(), event.y.toInt())) {
           onBackdropPress?.invoke()
         }
         wasBlocking
       }
-      MotionEvent.ACTION_POINTER_UP,
       MotionEvent.ACTION_CANCEL -> {
         val wasBlocking = blockingTouch
         blockingTouch = false
@@ -357,8 +577,28 @@ internal class SpotlightOverlayView(
   // Geometry helpers
   // -------------------------------------------------------------------------
 
-  private fun isTouchInsideHole(touchX: Int, touchY: Int): Boolean =
-    !holeRegion.isEmpty && holeRegion.contains(touchX, touchY)
+  /**
+   * Hit-test against the current hole path regardless of allowOverlayClick —
+   * onBackdropPress must only fire for real backdrop touches in both modes.
+   */
+  private fun isTouchInsideHole(touchX: Int, touchY: Int): Boolean {
+    if (holePath.isEmpty) return false
+    holePath.computeBounds(holePathBounds, true)
+    holePathBounds.roundOut(holeRegionBounds)
+    holeClipRegion.set(holeRegionBounds)
+    holeRegion.setPath(holePath, holeClipRegion)
+    return holeRegion.contains(touchX, touchY)
+  }
+
+  /**
+   * Pixels by which the padded hole extends above this view's top boundary.
+   * Used by HybridSpotlightView to shrink headerDimView so it never overlaps
+   * the hole when the target sits near the top of the overlay.
+   */
+  fun holeOverreach(): Float {
+    if (targetLocalPx.isEmpty) return 0f
+    return maxOf(0f, padding * cachedDensity - targetLocalPx.top)
+  }
 
   /**
    * Convert a React Native measureInWindow rect into this overlay's local
@@ -371,16 +611,6 @@ internal class SpotlightOverlayView(
    * visibleWindowFrame.top, so this adds the status-bar height to x/y, aligning
    * the rect with the overlay's local origin.
    */
-  /**
-   * Pixels by which the padded hole extends above this view's top boundary.
-   * Used by HybridSpotlightView to shrink headerDimView so it never overlaps
-   * the hole when the target sits near the top of the overlay.
-   */
-  fun holeOverreach(): Float {
-    if (targetLocalPx.isEmpty) return 0f
-    return maxOf(0f, padding * cachedDensity - targetLocalPx.top)
-  }
-
   fun windowDpToLocalDip(windowDp: RectF): RectF {
     val localPx = windowDpToLocalPx(windowDp)
     if (localPx.isEmpty) return RectF()
@@ -464,27 +694,25 @@ internal class SpotlightOverlayView(
       }
     }
 
-    // Pre-build the outer EVEN_ODD rect in local coordinates. This rect
-    // covers the full physical screen and doesn't change during an animation,
-    // so building it here (once) instead of inside rebuildHolePath() removes
-    // a getLocationOnScreen call and two displayMetrics reads per frame.
-    outerRectPath.rewind()
-    outerRectPath.addRect(
-      -cachedOverlayOrigin[0].toFloat(),
-      -cachedOverlayOrigin[1].toFloat(),
-      cachedScreenW - cachedOverlayOrigin[0],
-      cachedScreenH - cachedOverlayOrigin[1],
-      Path.Direction.CW,
-    )
+    // The EVEN_ODD outer rect only needs to contain the hole and the whole
+    // visible area. A very large rect is independent of window metrics, so it
+    // stays correct in split-screen / freeform windows where displayMetrics
+    // (window size) and getLocationOnScreen (display coordinates) disagree.
+    // Built once here; the canvas clip bounds what is actually rasterized.
+    if (outerRectPath.isEmpty) {
+      outerRectPath.addRect(-OUTER_EXTENT, -OUTER_EXTENT, OUTER_EXTENT, OUTER_EXTENT, Path.Direction.CW)
+    }
   }
 
   private fun rebuildHolePath() = traceSection(TRACE_REBUILD_HOLE) {
     overlayPath.reset()
     overlayPath.fillType = Path.FillType.EVEN_ODD
     holePath.reset()
-    holeRegion.setEmpty()
 
-    if (currentLocalPx.isEmpty || width == 0 || height == 0) return@traceSection
+    if (currentLocalPx.isEmpty || width == 0 || height == 0) {
+      if (held) overlayPath.addPath(outerRectPath)
+      return@traceSection
+    }
 
     val pad = padding * cachedDensity
     val radius = (borderRadius + padding).coerceAtLeast(0f) * cachedDensity
@@ -512,24 +740,17 @@ internal class SpotlightOverlayView(
     // view bounds or visibleWindowFrame.
     overlayPath.addPath(outerRectPath)
     overlayPath.addPath(holePath)
-
-    if (!allowOverlayClick) {
-      holePath.computeBounds(holePathBounds, true)
-      holePathBounds.roundOut(holeRegionBounds)
-      holeClipRegion.set(holeRegionBounds)
-      holeRegion.setPath(holePath, holeClipRegion)
-    }
   }
 
   private fun hasActiveSpotlight(): Boolean =
-    !currentLocalPx.isEmpty && !overlayPath.isEmpty
+    held || (!currentLocalPx.isEmpty && !overlayPath.isEmpty)
 
   // -------------------------------------------------------------------------
   // Animation
   // -------------------------------------------------------------------------
 
   private fun animateTo(target: RectF, durationMs: Long, onFinished: (() -> Unit)? = null) {
-    cancelAnimation()
+    cancelPathAnimation()
 
     if (durationMs <= 0L) {
       currentLocalPx.set(target)
@@ -558,29 +779,45 @@ internal class SpotlightOverlayView(
           lerp(from.right,  to.right,  p),
           lerp(from.bottom, to.bottom, p),
         )
+        // A cutout opening out of a held dim starts as a zero-size rect, which
+        // counts as "no hole" — keep drawing the plain dim until the hole has
+        // real size, otherwise that first frame would draw nothing (a blink).
+        if (held && !windowRectDp.isEmpty && !currentLocalPx.isEmpty) held = false
         rebuildHolePath()
         invalidate()
       }
 
       addListener(object : Animator.AnimatorListener {
+        // Animator.cancel() calls onAnimationCancel() and then onAnimationEnd().
+        // A cancelled animation was superseded — its owner already set up the
+        // next state, so the end logic must not run (it would reset the
+        // geometry the replacement animation starts from).
+        private var cancelled = false
+
         override fun onAnimationStart(animation: Animator) = Unit
 
         override fun onAnimationEnd(animation: Animator) {
-          activeAnimator = null
+          if (cancelled) return
+          if (activeAnimator === animation) activeAnimator = null
           if (windowRectDp.isEmpty) {
-            // Clear animation finished — reset everything.
-            currentLocalPx.setEmpty()
-            targetLocalPx.setEmpty()
-            overlayPath.reset()
-            holePath.reset()
-            holeRegion.setEmpty()
-            invalidate()
-            onFinished?.invoke()
+            if (held) {
+              // Collapse into a held dim finished: keep only the plain dim.
+              currentLocalPx.setEmpty()
+              targetLocalPx.setEmpty()
+              holePath.reset()
+              showHeldDim()
+            } else {
+              // Clear animation finished — reset everything.
+              resetState()
+              invalidate()
+              onFinished?.invoke()
+            }
           }
         }
 
         override fun onAnimationCancel(animation: Animator) {
-          activeAnimator = null
+          cancelled = true
+          if (activeAnimator === animation) activeAnimator = null
         }
 
         override fun onAnimationRepeat(animation: Animator) = Unit
@@ -590,9 +827,47 @@ internal class SpotlightOverlayView(
     }
   }
 
-  private fun cancelAnimation() {
+  private fun cancelPathAnimation() {
     activeAnimator?.cancel()
     activeAnimator = null
+  }
+
+  /** Cancels any path/fade animation and restores full opacity. */
+  private fun cancelAnimation() {
+    cancelPathAnimation()
+    fadeAnimator?.cancel()
+    fadeAnimator = null
+    alpha = 1f
+  }
+
+  private fun fadeTo(target: Float, durationMs: Long, onFinished: (() -> Unit)? = null) {
+    fadeAnimator?.cancel()
+    fadeAnimator = ValueAnimator.ofFloat(alpha, target).apply {
+      duration = durationMs
+      interpolator = DecelerateInterpolator()
+      addUpdateListener { alpha = it.animatedValue as Float }
+      addListener(object : Animator.AnimatorListener {
+        // cancel() also calls onAnimationEnd(); a cancelled fade was superseded.
+        private var cancelled = false
+
+        override fun onAnimationStart(animation: Animator) = Unit
+
+        override fun onAnimationEnd(animation: Animator) {
+          if (cancelled) return
+          if (fadeAnimator === animation) fadeAnimator = null
+          alpha = if (target <= 0f && windowRectDp.isEmpty) 1f else target
+          onFinished?.invoke()
+        }
+
+        override fun onAnimationCancel(animation: Animator) {
+          cancelled = true
+          if (fadeAnimator === animation) fadeAnimator = null
+        }
+
+        override fun onAnimationRepeat(animation: Animator) = Unit
+      })
+      start()
+    }
   }
 
   private fun RectF.approximatelyEquals(other: RectF, tolerance: Float = 0.5f): Boolean =
@@ -636,5 +911,6 @@ internal class SpotlightOverlayView(
     private const val TRACE_TOUCH = "Spotlight.dispatchTouchEvent"
     private const val TRACE_WINDOW_TO_LOCAL = "Spotlight.windowDpToLocalPx"
     private const val TRACE_REBUILD_HOLE = "Spotlight.rebuildHolePath"
+    private const val OUTER_EXTENT = 20000f
   }
 }

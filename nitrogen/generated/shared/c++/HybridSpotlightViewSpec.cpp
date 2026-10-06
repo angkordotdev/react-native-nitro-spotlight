@@ -18,14 +18,20 @@ namespace margelo::nitro::spotlight {
       prototype.registerHybridSetter("dimOpacity", &HybridSpotlightViewSpec::setDimOpacity);
       prototype.registerHybridGetter("shape", &HybridSpotlightViewSpec::getShape);
       prototype.registerHybridSetter("shape", &HybridSpotlightViewSpec::setShape);
-      prototype.registerHybridGetter("borderRadius", &HybridSpotlightViewSpec::getBorderRadius);
-      prototype.registerHybridSetter("borderRadius", &HybridSpotlightViewSpec::setBorderRadius);
-      prototype.registerHybridGetter("padding", &HybridSpotlightViewSpec::getPadding);
-      prototype.registerHybridSetter("padding", &HybridSpotlightViewSpec::setPadding);
-      prototype.registerHybridGetter("borderWidth", &HybridSpotlightViewSpec::getBorderWidth);
-      prototype.registerHybridSetter("borderWidth", &HybridSpotlightViewSpec::setBorderWidth);
-      prototype.registerHybridGetter("borderColor", &HybridSpotlightViewSpec::getBorderColor);
-      prototype.registerHybridSetter("borderColor", &HybridSpotlightViewSpec::setBorderColor);
+      prototype.registerHybridGetter("cornerRadius", &HybridSpotlightViewSpec::getCornerRadius);
+      prototype.registerHybridSetter("cornerRadius", &HybridSpotlightViewSpec::setCornerRadius);
+      prototype.registerHybridGetter("cutoutPadding", &HybridSpotlightViewSpec::getCutoutPadding);
+      prototype.registerHybridSetter("cutoutPadding", &HybridSpotlightViewSpec::setCutoutPadding);
+      prototype.registerHybridGetter("ringWidth", &HybridSpotlightViewSpec::getRingWidth);
+      prototype.registerHybridSetter("ringWidth", &HybridSpotlightViewSpec::setRingWidth);
+      prototype.registerHybridGetter("ringColor", &HybridSpotlightViewSpec::getRingColor);
+      prototype.registerHybridSetter("ringColor", &HybridSpotlightViewSpec::setRingColor);
+      prototype.registerHybridGetter("enteringAnimation", &HybridSpotlightViewSpec::getEnteringAnimation);
+      prototype.registerHybridSetter("enteringAnimation", &HybridSpotlightViewSpec::setEnteringAnimation);
+      prototype.registerHybridGetter("exitAnimation", &HybridSpotlightViewSpec::getExitAnimation);
+      prototype.registerHybridSetter("exitAnimation", &HybridSpotlightViewSpec::setExitAnimation);
+      prototype.registerHybridGetter("exitDurationMs", &HybridSpotlightViewSpec::getExitDurationMs);
+      prototype.registerHybridSetter("exitDurationMs", &HybridSpotlightViewSpec::setExitDurationMs);
       prototype.registerHybridGetter("allowOverlayClick", &HybridSpotlightViewSpec::getAllowOverlayClick);
       prototype.registerHybridSetter("allowOverlayClick", &HybridSpotlightViewSpec::setAllowOverlayClick);
       prototype.registerHybridGetter("onTargetLayout", &HybridSpotlightViewSpec::getOnTargetLayout);
@@ -35,6 +41,7 @@ namespace margelo::nitro::spotlight {
       prototype.registerHybridMethod("highlight", &HybridSpotlightViewSpec::highlight);
       prototype.registerHybridMethod("highlightAnimated", &HybridSpotlightViewSpec::highlightAnimated);
       prototype.registerHybridMethod("clear", &HybridSpotlightViewSpec::clear);
+      prototype.registerHybridMethod("holdDim", &HybridSpotlightViewSpec::holdDim);
     });
   }
 

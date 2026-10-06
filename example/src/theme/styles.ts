@@ -6,7 +6,6 @@ export const spotlightProps = {
   borderWidth: 1.5,
   padding: 8,
   borderColor: '#8FB7FF',
-  allowOverlayClick: true,
 } as const;
 
 export const styles = StyleSheet.create({
@@ -144,8 +143,6 @@ export const styles = StyleSheet.create({
     lineHeight: 23,
     textAlign: 'center',
   },
-  offscreen: { position: 'absolute', top: -9999 },
-  portalAnchor: { width: 1, height: 1 },
   portalHost: {
     position: 'absolute',
     top: 0,

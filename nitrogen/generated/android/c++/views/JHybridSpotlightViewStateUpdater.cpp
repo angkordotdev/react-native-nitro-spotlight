@@ -15,73 +15,114 @@ namespace margelo::nitro::spotlight::views {
 using namespace facebook;
 using ConcreteStateData = react::ConcreteState<HybridSpotlightViewState>;
 
-void JHybridSpotlightViewStateUpdater::updateViewProps(jni::alias_ref<jni::JClass> /* class */,
-                                           jni::alias_ref<JHybridSpotlightViewSpec::JavaPart> javaView,
-                                           jni::alias_ref<JStateWrapper::javaobject> stateWrapperInterface) {
-  std::shared_ptr<JHybridSpotlightViewSpec> hybridView = javaView->getJHybridSpotlightViewSpec();
-
-  // Get concrete StateWrapperImpl from passed StateWrapper interface object
-  jobject rawStateWrapper = stateWrapperInterface.get();
-  if (!stateWrapperInterface->isInstanceOf(react::StateWrapperImpl::javaClassStatic())) [[unlikely]] {
-      throw std::runtime_error("StateWrapper is not a StateWrapperImpl");
+std::shared_ptr<const HybridSpotlightViewProps> JHybridSpotlightViewStateUpdater::getPropsFromStateWrapper(
+    jni::alias_ref<JStateWrapper::javaobject> stateWrapper) {
+  if (stateWrapper.get() == nullptr) {
+    return nullptr;
   }
-  auto stateWrapper = jni::alias_ref<react::StateWrapperImpl::javaobject>{
-            static_cast<react::StateWrapperImpl::javaobject>(rawStateWrapper)};
-  std::shared_ptr<const react::State> state = stateWrapper->cthis()->getState();
+  // Get concrete StateWrapperImpl from passed StateWrapper interface object
+  jobject rawStateWrapper = stateWrapper.get();
+  if (!stateWrapper->isInstanceOf(react::StateWrapperImpl::javaClassStatic())) [[unlikely]] {
+    throw std::runtime_error("StateWrapper is not a StateWrapperImpl");
+  }
+  auto stateWrapperImpl = jni::alias_ref<react::StateWrapperImpl::javaobject>{
+    static_cast<react::StateWrapperImpl::javaobject>(rawStateWrapper)
+  };
+  std::shared_ptr<const react::State> state = stateWrapperImpl->cthis()->getState();
+  if (state == nullptr) {
+    return nullptr;
+  }
   auto concreteState = std::static_pointer_cast<const ConcreteStateData>(state);
   const HybridSpotlightViewState& data = concreteState->getData();
-  const std::shared_ptr<HybridSpotlightViewProps>& props = data.getProps();
+  const std::shared_ptr<const HybridSpotlightViewProps>& props = data.getProps();
   if (props == nullptr) [[unlikely]] {
-    // Props aren't set yet!
     throw std::runtime_error("HybridSpotlightViewState's data doesn't contain any props!");
   }
+  return props;
+}
 
-  // Update all props if they are dirty
-  if (props->dimOpacity.isDirty) {
-    hybridView->setDimOpacity(props->dimOpacity.value);
-    props->dimOpacity.isDirty = false;
+void JHybridSpotlightViewStateUpdater::updateViewProps(jni::alias_ref<jni::JClass> /* class */,
+                                           jni::alias_ref<JHybridSpotlightViewSpec::JavaPart> javaView,
+                                           jni::alias_ref<JStateWrapper::javaobject> newState,
+                                           jni::alias_ref<JStateWrapper::javaobject> oldState) {
+  std::shared_ptr<JHybridSpotlightViewSpec> hybridView = javaView->getJHybridSpotlightViewSpec();
+  std::shared_ptr<const HybridSpotlightViewProps> newProps = getPropsFromStateWrapper(newState);
+  std::shared_ptr<const HybridSpotlightViewProps> oldProps = getPropsFromStateWrapper(oldState);
+  if (newProps == nullptr) [[unlikely]] {
+    throw std::runtime_error("Current StateWrapper doesn't contain any props!");
   }
-  if (props->shape.isDirty) {
-    hybridView->setShape(props->shape.value);
-    props->shape.isDirty = false;
+
+  // Update only props that differ from the previous State snapshot.
+  if (oldProps == nullptr
+        ? newProps->dimOpacity.isProvided()
+        : !newProps->dimOpacity.hasSameValue(oldProps->dimOpacity)) {
+    hybridView->setDimOpacity(newProps->dimOpacity.get());
   }
-  if (props->borderRadius.isDirty) {
-    hybridView->setBorderRadius(props->borderRadius.value);
-    props->borderRadius.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->shape.isProvided()
+        : !newProps->shape.hasSameValue(oldProps->shape)) {
+    hybridView->setShape(newProps->shape.get());
   }
-  if (props->padding.isDirty) {
-    hybridView->setPadding(props->padding.value);
-    props->padding.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->cornerRadius.isProvided()
+        : !newProps->cornerRadius.hasSameValue(oldProps->cornerRadius)) {
+    hybridView->setCornerRadius(newProps->cornerRadius.get());
   }
-  if (props->borderWidth.isDirty) {
-    hybridView->setBorderWidth(props->borderWidth.value);
-    props->borderWidth.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->cutoutPadding.isProvided()
+        : !newProps->cutoutPadding.hasSameValue(oldProps->cutoutPadding)) {
+    hybridView->setCutoutPadding(newProps->cutoutPadding.get());
   }
-  if (props->borderColor.isDirty) {
-    hybridView->setBorderColor(props->borderColor.value);
-    props->borderColor.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->ringWidth.isProvided()
+        : !newProps->ringWidth.hasSameValue(oldProps->ringWidth)) {
+    hybridView->setRingWidth(newProps->ringWidth.get());
   }
-  if (props->allowOverlayClick.isDirty) {
-    hybridView->setAllowOverlayClick(props->allowOverlayClick.value);
-    props->allowOverlayClick.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->ringColor.isProvided()
+        : !newProps->ringColor.hasSameValue(oldProps->ringColor)) {
+    hybridView->setRingColor(newProps->ringColor.get());
   }
-  if (props->onTargetLayout.isDirty) {
-    hybridView->setOnTargetLayout(props->onTargetLayout.value);
-    props->onTargetLayout.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->enteringAnimation.isProvided()
+        : !newProps->enteringAnimation.hasSameValue(oldProps->enteringAnimation)) {
+    hybridView->setEnteringAnimation(newProps->enteringAnimation.get());
   }
-  if (props->onBackdropPress.isDirty) {
-    hybridView->setOnBackdropPress(props->onBackdropPress.value);
-    props->onBackdropPress.isDirty = false;
+  if (oldProps == nullptr
+        ? newProps->exitAnimation.isProvided()
+        : !newProps->exitAnimation.hasSameValue(oldProps->exitAnimation)) {
+    hybridView->setExitAnimation(newProps->exitAnimation.get());
+  }
+  if (oldProps == nullptr
+        ? newProps->exitDurationMs.isProvided()
+        : !newProps->exitDurationMs.hasSameValue(oldProps->exitDurationMs)) {
+    hybridView->setExitDurationMs(newProps->exitDurationMs.get());
+  }
+  if (oldProps == nullptr
+        ? newProps->allowOverlayClick.isProvided()
+        : !newProps->allowOverlayClick.hasSameValue(oldProps->allowOverlayClick)) {
+    hybridView->setAllowOverlayClick(newProps->allowOverlayClick.get());
+  }
+  if (oldProps == nullptr
+        ? newProps->onTargetLayout.isProvided()
+        : !newProps->onTargetLayout.hasSameValue(oldProps->onTargetLayout)) {
+    hybridView->setOnTargetLayout(newProps->onTargetLayout.get());
+  }
+  if (oldProps == nullptr
+        ? newProps->onBackdropPress.isProvided()
+        : !newProps->onBackdropPress.hasSameValue(oldProps->onBackdropPress)) {
+    hybridView->setOnBackdropPress(newProps->onBackdropPress.get());
   }
 
   // Update hybridRef if it changed
-  if (props->hybridRef.isDirty) {
+  if (oldProps == nullptr
+        ? newProps->hybridRef.isProvided()
+        : !newProps->hybridRef.hasSameValue(oldProps->hybridRef)) {
     // hybridRef changed - call it with new this
-    const auto& maybeFunc = props->hybridRef.value;
+    const auto& maybeFunc = newProps->hybridRef.get();
     if (maybeFunc.has_value()) {
       maybeFunc.value()(hybridView);
     }
-    props->hybridRef.isDirty = false;
   }
 }
 
