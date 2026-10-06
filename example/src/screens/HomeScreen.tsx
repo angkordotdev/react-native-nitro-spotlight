@@ -44,7 +44,7 @@ const SCENARIOS: Array<{
     name: 'Teleport',
     title: 'Teleport host',
     icon: '🌀',
-    copy: 'Preload offscreen and pull in with PortalHost.',
+    copy: 'One app-wide spotlight teleported above the native header.',
   },
   {
     name: 'FullWindow',

@@ -143,8 +143,6 @@ export const styles = StyleSheet.create({
     lineHeight: 23,
     textAlign: 'center',
   },
-  offscreen: { position: 'absolute', top: -9999 },
-  portalAnchor: { width: 1, height: 1 },
   portalHost: {
     position: 'absolute',
     top: 0,

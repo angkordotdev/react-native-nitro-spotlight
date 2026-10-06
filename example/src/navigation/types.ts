@@ -5,7 +5,10 @@ export type RootStackParamList = {
   CustomState: undefined;
   Touch: undefined;
   Lifecycle: undefined;
-  Teleport: undefined;
+  // `arrive` is a changing token: the spotlight morphs onto this screen's
+  // target after the transition (see spotlight/useSpotlightOnArrive.ts).
+  Teleport: { arrive?: number } | undefined;
+  TeleportDetails: { arrive?: number } | undefined;
   FullWindow: undefined;
   Shape: undefined;
   Sheet: undefined;

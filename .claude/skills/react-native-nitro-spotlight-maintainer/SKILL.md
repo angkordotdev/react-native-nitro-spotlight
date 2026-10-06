@@ -64,6 +64,7 @@ Teleport integration is allowed, but keep the distinction clear:
 - Spotlight itself has no provider.
 - `react-native-teleport` uses `PortalProvider`, `PortalHost`, and `Portal` when users want the Spotlight anchor in a top-level overlay host.
 - Target refs stay on the original views because `highlight(ref)` uses `measureInWindow`.
+- The reference implementation is the example's app-wide root spotlight: `example/src/spotlight/RootSpotlight.tsx` (`RootSpotlightProvider` + `useRootSpotlight().show(ref, tip)`), mounted in `example/src/App.tsx` with the `PortalHost` as a sibling after `NavigationContainer`. Cross-screen: the leaving screen calls `holdThen(() => navigate(..., { arrive: Date.now() }))` (`hold()` collapses the cutout but keeps the dim, so no stale hole and no bright blink) and the new screen runs `useSpotlightOnArrive` (`transitionEnd` + timer fallback, once per token) which calls `show()` to open a cutout from the held dim. Native `holdDim()` (Android `held` flag in SpotlightOverlayView, iOS `isHeld` in SpotlightView) draws a plain full-screen dim and still blocks touches; `clear()` fades it out. Opening out of a held dim always zooms (never fades), and on iOS must animate from the collapsed-hole path explicitly (`forceFrom`) because the held path has no hole and can't be tweened. Keep README's Teleport section in sync with it (straight quotes in code blocks).
 
 For tours:
 
