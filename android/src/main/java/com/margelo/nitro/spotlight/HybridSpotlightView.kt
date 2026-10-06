@@ -47,6 +47,9 @@ class HybridSpotlightView(
    */
   private var lastWindowRect: RectF? = null
 
+  /** True while the dim is held without a cutout (holdDim()). */
+  private var holding = false
+
   init {
     // Clean up headerDimView when the spotlight overlay detaches from its
     // window (unmount without recycle). prepareForRecycle() handles the pool
@@ -211,7 +214,10 @@ class HybridSpotlightView(
     // clearing the overlay or dimming the header with no hole.
     if (width <= 0.0 || height <= 0.0) return
     UiThreadUtil.runOnUiThread {
-      val entering = lastWindowRect == null
+      // Coming out of a held dim the header strip is already showing: it must
+      // not fade in again.
+      val entering = lastWindowRect == null && !holding
+      holding = false
       lastWindowRect = RectF(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat())
       spotlightView.setHighlight(
         xDp      = x.toFloat(),
@@ -235,7 +241,10 @@ class HybridSpotlightView(
   ) {
     if (width <= 0.0 || height <= 0.0) return
     UiThreadUtil.runOnUiThread {
-      val entering = lastWindowRect == null
+      // Coming out of a held dim the header strip is already showing: it must
+      // not fade in again.
+      val entering = lastWindowRect == null && !holding
+      holding = false
       lastWindowRect = RectF(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat())
       spotlightView.setHighlight(
         xDp        = x.toFloat(),
@@ -251,8 +260,20 @@ class HybridSpotlightView(
     }
   }
 
+  override fun holdDim() {
+    UiThreadUtil.runOnUiThread {
+      lastWindowRect = null
+      holding = true
+      // The header strip stays up (the dim is held); clear() removes it.
+      spotlightView.holdDim(
+        durationMs = (exitDurationMsValue ?: DEFAULT_EXIT_DURATION_MS).toLong(),
+      )
+    }
+  }
+
   override fun clear() {
     UiThreadUtil.runOnUiThread {
+      holding = false
       lastWindowRect = null
       val exitMs = (exitDurationMsValue ?: DEFAULT_EXIT_DURATION_MS).toLong()
       // The overlay runs the configured exit animation; the header strip is
@@ -309,6 +330,7 @@ class HybridSpotlightView(
     exitAnimationValue = null
     exitDurationMsValue = null
     lastWindowRect = null
+    holding = false
     UiThreadUtil.runOnUiThread {
       spotlightView.dimOpacity = DEFAULT_DIM_OPACITY.toFloat()
       spotlightView.shape = DEFAULT_SHAPE

@@ -187,5 +187,9 @@ namespace margelo::nitro::spotlight {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("clear");
     method(_javaPart);
   }
+  void JHybridSpotlightViewSpec::holdDim() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("holdDim");
+    method(_javaPart);
+  }
 
 } // namespace margelo::nitro::spotlight

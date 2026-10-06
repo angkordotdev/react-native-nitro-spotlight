@@ -27,6 +27,7 @@ public protocol HybridSpotlightViewSpec_protocol: HybridObject, HybridView {
   func highlight(x: Double, y: Double, width: Double, height: Double) throws -> Void
   func highlightAnimated(x: Double, y: Double, width: Double, height: Double, durationMs: Double) throws -> Void
   func clear() throws -> Void
+  func holdDim() throws -> Void
 }
 
 public extension HybridSpotlightViewSpec_protocol {

@@ -41,6 +41,7 @@ namespace margelo::nitro::spotlight {
       prototype.registerHybridMethod("highlight", &HybridSpotlightViewSpec::highlight);
       prototype.registerHybridMethod("highlightAnimated", &HybridSpotlightViewSpec::highlightAnimated);
       prototype.registerHybridMethod("clear", &HybridSpotlightViewSpec::clear);
+      prototype.registerHybridMethod("holdDim", &HybridSpotlightViewSpec::holdDim);
     });
   }
 

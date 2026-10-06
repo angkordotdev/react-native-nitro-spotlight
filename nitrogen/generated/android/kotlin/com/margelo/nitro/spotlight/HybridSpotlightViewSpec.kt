@@ -127,6 +127,10 @@ abstract class HybridSpotlightViewSpec: HybridView() {
   @DoNotStrip
   @Keep
   abstract fun clear(): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun holdDim(): Unit
 
   // Default implementation of `HybridObject.toString()`
   override fun toString(): String {

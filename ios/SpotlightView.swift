@@ -85,6 +85,10 @@ public final class SpotlightView: UIView {
   private var resolvedBorderColor = UIColor.white
   private var needsRedrawAfterAnimation = false
 
+  /// True while the dim is held with no cutout (see holdDim()). The dim keeps
+  /// covering and blocking touches; a following setHighlight() opens a cutout.
+  private var isHeld = false
+
   // MARK: - Init
 
   override init(frame: CGRect) {
@@ -181,8 +185,31 @@ public final class SpotlightView: UIView {
       return
     }
     sourceRect = rect
+    isHeld = false
     syncFrameToWindow()
     redraw(animated: animated, duration: duration)
+  }
+
+  /// Collapse the cutout into its centre but keep the full-screen dim and
+  /// touch blocking up, so the dim never blinks off (e.g. across a screen
+  /// change). The next setHighlight() opens a cutout from the held dim; clear()
+  /// fades the dim out.
+  func holdDim(
+    animated: Bool = true,
+    duration: TimeInterval = 0.2
+  ) {
+    if isHeld, sourceRect.isEmpty { return }
+    let hadCutout = !sourceRect.isEmpty
+    sourceRect = .zero
+    isHeld = true
+    if hadCutout {
+      // Zoom the hole closed; pathAnimationDidFinish() leaves the plain dim.
+      redraw(animated: animated, duration: duration)
+    } else {
+      // Nothing was showing: bring the dim in with a fade.
+      redraw(animated: false)
+      if animated { fadeLayers(from: 0, to: 1, duration: duration) }
+    }
   }
 
   func clear(
@@ -190,6 +217,27 @@ public final class SpotlightView: UIView {
     duration: TimeInterval = 0.2
   ) {
     if sourceRect.isEmpty, hasRunningPathAnimation { return }
+    if isHeld, sourceRect.isEmpty {
+      // Dismiss a held dim: fade it out (or drop it at once).
+      isHeld = false
+      currentOverlayPath = nil
+      currentHolePath = nil
+      if animated, exitAnimation != .none {
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+          self?.pathAnimationDidFinish()
+        }
+        fadeLayers(from: 1, to: 0, duration: duration)
+        CATransaction.commit()
+      } else {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        spotlightMask.path = nil
+        ringLayer.path = nil
+        CATransaction.commit()
+      }
+      return
+    }
     sourceRect = .zero
     redraw(animated: animated, duration: duration)
   }
@@ -201,7 +249,7 @@ public final class SpotlightView: UIView {
   private var lastBackdropEventTimestamp: TimeInterval = -1
 
   public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    guard !sourceRect.isEmpty else { return nil }
+    guard !sourceRect.isEmpty || isHeld else { return nil }
     guard isBackdropPoint(point) else { return nil }
     if allowOverlayClick {
       if let event, event.type == .touches, event.timestamp != lastBackdropEventTimestamp {
@@ -214,7 +262,7 @@ public final class SpotlightView: UIView {
   }
 
   public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-    guard !sourceRect.isEmpty, !allowOverlayClick else { return false }
+    guard !sourceRect.isEmpty || isHeld, !allowOverlayClick else { return false }
     return isBackdropPoint(point)
   }
 
@@ -296,8 +344,18 @@ public final class SpotlightView: UIView {
 
     let isEntering = nextHolePath != nil && oldHolePath == nil
     let isExiting = nextHolePath == nil && oldHolePath != nil
-    let transition: SpotlightTransition =
-      isEntering ? enteringAnimation : (isExiting ? exitAnimation : .zoom)
+    // Into/out of a held dim the dim itself must not fade, so the hole always
+    // zooms (or is instant when the transition is 'none').
+    let intoHold = isHeld && nextHolePath == nil
+    let fromHold = isEntering && oldOverlayPath != nil
+    let transition: SpotlightTransition
+    if intoHold {
+      transition = exitAnimation == .none ? .none : .zoom
+    } else if fromHold {
+      transition = enteringAnimation == .none ? .none : .zoom
+    } else {
+      transition = isEntering ? enteringAnimation : (isExiting ? exitAnimation : .zoom)
+    }
 
     guard animated, !((isEntering || isExiting) && transition == .none) else {
       CATransaction.begin()
@@ -357,8 +415,17 @@ public final class SpotlightView: UIView {
     CATransaction.setCompletionBlock { [weak self] in
       self?.pathAnimationDidFinish()
     }
-    animate(layer: spotlightMask, from: fromOverlay, to: toOverlay, duration: duration)
-    animate(layer: ringLayer, from: fromRing, to: toRing, duration: duration)
+    // Out of a held dim the layer's current path is the plain dim (no hole),
+    // which has a different shape from the hole path and can't be tweened —
+    // so start explicitly from the collapsed-hole path instead.
+    animate(
+      layer: spotlightMask, from: fromOverlay, to: toOverlay,
+      duration: duration, forceFrom: fromHold
+    )
+    animate(
+      layer: ringLayer, from: fromRing, to: toRing,
+      duration: duration, forceFrom: fromHold
+    )
     CATransaction.commit()
   }
 
@@ -391,10 +458,11 @@ public final class SpotlightView: UIView {
     // A newer animation took over — it owns the cleanup.
     guard !hasRunningPathAnimation else { return }
     if sourceRect.isEmpty {
-      // Collapse finished: drop the collapsed hole so nothing stays dimmed.
+      // Collapse finished: drop the collapsed hole. Held keeps the plain dim,
+      // otherwise nothing stays dimmed.
       CATransaction.begin()
       CATransaction.setDisableActions(true)
-      spotlightMask.path = nil
+      spotlightMask.path = isHeld ? currentOverlayPath?.cgPath : nil
       ringLayer.path = nil
       spotlightMask.opacity = 1
       ringLayer.opacity = 1
@@ -435,7 +503,8 @@ public final class SpotlightView: UIView {
   }
 
   private func makeOverlayPath(holePath: UIBezierPath?) -> UIBezierPath? {
-    guard let holePath else { return nil }
+    // Held: dim everywhere, no hole.
+    guard holePath != nil || isHeld else { return nil }
     let path = UIBezierPath()
     path.usesEvenOddFillRule = true
     // Use the window rect converted to local space rather than self.bounds.
@@ -445,7 +514,7 @@ public final class SpotlightView: UIView {
     // dim-everywhere-except-hole, regardless of layout timing.
     let outerRect = window.map { convert($0.bounds, from: nil) } ?? bounds
     path.append(UIBezierPath(rect: outerRect))
-    path.append(holePath)
+    if let holePath { path.append(holePath) }
     return path
   }
 
@@ -466,9 +535,10 @@ public final class SpotlightView: UIView {
     layer: CAShapeLayer,
     from: CGPath?,
     to: CGPath?,
-    duration: TimeInterval
+    duration: TimeInterval,
+    forceFrom: Bool = false
   ) {
-    let actualFrom = layer.presentation()?.path ?? from
+    let actualFrom = forceFrom ? from : (layer.presentation()?.path ?? from)
     layer.removeAnimation(forKey: "path")
     layer.path = to
     guard let actualFrom, let to else { return }

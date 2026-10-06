@@ -158,6 +158,13 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
     }
   }
 
+  func holdDim() throws {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      spotlightView.holdDim(animated: true, duration: spotlightView.exitDuration)
+    }
+  }
+
   func clear() throws {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }

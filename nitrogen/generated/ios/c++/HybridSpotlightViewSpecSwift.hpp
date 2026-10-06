@@ -171,6 +171,12 @@ namespace margelo::nitro::spotlight {
         std::rethrow_exception(__result.error());
       }
     }
+    inline void holdDim() override {
+      auto __result = _swiftPart.holdDim();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
 
   private:
     Spotlight::HybridSpotlightViewSpec_cxx _swiftPart;

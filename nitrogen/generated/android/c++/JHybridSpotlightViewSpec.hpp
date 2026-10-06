@@ -80,6 +80,7 @@ namespace margelo::nitro::spotlight {
     void highlight(double x, double y, double width, double height) override;
     void highlightAnimated(double x, double y, double width, double height, double durationMs) override;
     void clear() override;
+    void holdDim() override;
 
   private:
     jni::global_ref<JHybridSpotlightViewSpec::JavaPart> _javaPart;

@@ -78,6 +78,7 @@ namespace margelo::nitro::spotlight {
       virtual void highlight(double x, double y, double width, double height) = 0;
       virtual void highlightAnimated(double x, double y, double width, double height, double durationMs) = 0;
       virtual void clear() = 0;
+      virtual void holdDim() = 0;
 
     protected:
       // Hybrid Setup

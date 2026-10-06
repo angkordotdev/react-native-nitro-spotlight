@@ -34,6 +34,13 @@ export interface SpotlightControls {
   /** Clear the spotlight. */
   clear(): void;
 
+  /**
+   * Collapse the cutout but keep the dim (and touch blocking) showing. Useful
+   * between screens: hold(), navigate, then highlight() on the new screen so
+   * the dim never blinks off. Call clear() to dismiss it.
+   */
+  hold(): void;
+
   /** Current cutout rect in window coordinates. null when the spotlight is hidden. */
   targetRect: Rect | null;
 }
@@ -165,8 +172,16 @@ export function useSpotlight(): SpotlightControls {
     _ref.current?.clear();
   }, [finishAnimationGuard]);
 
+  const hold = useCallback(() => {
+    generationRef.current++;
+    activeRef.current = false;
+    finishAnimationGuard();
+    setTargetRect(null);
+    _ref.current?.holdDim();
+  }, [finishAnimationGuard]);
+
   return useMemo(
-    () => ({ _ref, _onTargetLayout, highlight, clear, targetRect }),
-    [clear, highlight, _onTargetLayout, targetRect]
+    () => ({ _ref, _onTargetLayout, highlight, clear, hold, targetRect }),
+    [clear, hold, highlight, _onTargetLayout, targetRect]
   );
 }

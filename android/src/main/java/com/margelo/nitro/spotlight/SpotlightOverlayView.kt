@@ -163,6 +163,12 @@ internal class SpotlightOverlayView(
 
   private var activeAnimator: ValueAnimator? = null
 
+  /**
+   * True while the dim is held with no cutout (see holdDim()): the dim keeps
+   * covering and blocking touches until the next highlight or clear().
+   */
+  private var held = false
+
   // Fade runs on the view's own alpha (the overlay has no drawn children — the
   // tooltip is a JS sibling), independent of the path animator so a fade-in can
   // overlap a cutout morph.
@@ -298,12 +304,18 @@ internal class SpotlightOverlayView(
 
     targetLocalPx.set(windowDpToLocalPx(windowRectDp))
 
-    val entering = currentLocalPx.isEmpty
+    // Opening a cutout out of a held dim is never a fade (the dim is already
+    // there): the hole zooms open, or snaps when the transition is 'none'.
+    val fromHeld = held
+    val entering = currentLocalPx.isEmpty && !fromHeld
     // Resume point if this interrupts a fade-out (alpha < 1).
     val resumeAlpha = alpha
 
-    if (!animated || durationMs <= 0L || (entering && enteringAnimation == TRANSITION_NONE)) {
+    if (!animated || durationMs <= 0L ||
+      ((entering || fromHeld) && enteringAnimation == TRANSITION_NONE)
+    ) {
       cancelAnimation()
+      held = false
       currentLocalPx.set(targetLocalPx)
       rebuildHolePath()
       invalidate()
@@ -336,6 +348,17 @@ internal class SpotlightOverlayView(
 
     windowRectDp.setEmpty()
 
+    if (held && currentLocalPx.isEmpty && durationMs > 0L && exitAnimation != TRANSITION_NONE) {
+      // Dismiss a held dim with a fade. `held` stays true until the fade ends
+      // (resetState) so the dim keeps drawing while it fades.
+      fadeTo(0f, durationMs) {
+        resetState()
+        invalidate()
+        onFinished?.invoke()
+      }
+      return
+    }
+
     if (durationMs <= 0L || currentLocalPx.isEmpty || exitAnimation == TRANSITION_NONE) {
       resetState()
       invalidate()
@@ -365,7 +388,55 @@ internal class SpotlightOverlayView(
     animateTo(RectF(centerX, centerY, centerX, centerY), durationMs, onFinished)
   }
 
+  /**
+   * Collapse the cutout into its centre but keep the full-screen dim and touch
+   * blocking up, so the dim never blinks off (e.g. across a screen change). The
+   * next setHighlight() opens a cutout from the held dim; clear() fades it out.
+   */
+  fun holdDim(durationMs: Long = 200L) {
+    if (held && currentLocalPx.isEmpty) return
+    windowRectDp.setEmpty()
+    held = true
+
+    if (currentLocalPx.isEmpty) {
+      // Nothing was showing: bring the plain dim in with a fade.
+      cancelAnimation()
+      showHeldDim()
+      if (durationMs > 0L) {
+        alpha = 0f
+        fadeTo(1f, durationMs)
+      }
+      return
+    }
+
+    if (durationMs <= 0L || exitAnimation == TRANSITION_NONE) {
+      cancelAnimation()
+      currentLocalPx.setEmpty()
+      targetLocalPx.setEmpty()
+      holePath.reset()
+      showHeldDim()
+      return
+    }
+
+    refreshGeometryCache()
+    fadeAnimator?.cancel()
+    fadeAnimator = null
+    alpha = 1f
+    val centerX = currentLocalPx.centerX()
+    val centerY = currentLocalPx.centerY()
+    // The animator's end handler leaves the plain dim (see enterHeldDim()).
+    animateTo(RectF(centerX, centerY, centerX, centerY), durationMs)
+  }
+
+  private fun showHeldDim() {
+    overlayPath.reset()
+    overlayPath.fillType = Path.FillType.EVEN_ODD
+    overlayPath.addPath(outerRectPath)
+    invalidate()
+  }
+
   private fun resetState() {
+    held = false
     cancelAnimation()
     currentLocalPx.setEmpty()
     targetLocalPx.setEmpty()
@@ -638,7 +709,10 @@ internal class SpotlightOverlayView(
     overlayPath.fillType = Path.FillType.EVEN_ODD
     holePath.reset()
 
-    if (currentLocalPx.isEmpty || width == 0 || height == 0) return@traceSection
+    if (currentLocalPx.isEmpty || width == 0 || height == 0) {
+      if (held) overlayPath.addPath(outerRectPath)
+      return@traceSection
+    }
 
     val pad = padding * cachedDensity
     val radius = (borderRadius + padding).coerceAtLeast(0f) * cachedDensity
@@ -669,7 +743,7 @@ internal class SpotlightOverlayView(
   }
 
   private fun hasActiveSpotlight(): Boolean =
-    !currentLocalPx.isEmpty && !overlayPath.isEmpty
+    held || (!currentLocalPx.isEmpty && !overlayPath.isEmpty)
 
   // -------------------------------------------------------------------------
   // Animation
@@ -705,6 +779,10 @@ internal class SpotlightOverlayView(
           lerp(from.right,  to.right,  p),
           lerp(from.bottom, to.bottom, p),
         )
+        // A cutout opening out of a held dim starts as a zero-size rect, which
+        // counts as "no hole" — keep drawing the plain dim until the hole has
+        // real size, otherwise that first frame would draw nothing (a blink).
+        if (held && !windowRectDp.isEmpty && !currentLocalPx.isEmpty) held = false
         rebuildHolePath()
         invalidate()
       }
@@ -722,10 +800,18 @@ internal class SpotlightOverlayView(
           if (cancelled) return
           if (activeAnimator === animation) activeAnimator = null
           if (windowRectDp.isEmpty) {
-            // Clear animation finished — reset everything.
-            resetState()
-            invalidate()
-            onFinished?.invoke()
+            if (held) {
+              // Collapse into a held dim finished: keep only the plain dim.
+              currentLocalPx.setEmpty()
+              targetLocalPx.setEmpty()
+              holePath.reset()
+              showHeldDim()
+            } else {
+              // Clear animation finished — reset everything.
+              resetState()
+              invalidate()
+              onFinished?.invoke()
+            }
           }
         }
 

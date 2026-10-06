@@ -59,6 +59,13 @@ export interface SpotlightMethods extends HybridViewMethods {
   ): void;
 
   clear(): void;
+
+  /**
+   * Collapse the cutout but keep the full-screen dim (and touch blocking) up.
+   * Use it between screens so the dim never blinks off. The next highlight*()
+   * opens a cutout from the held dim; clear() fades the dim out.
+   */
+  holdDim(): void;
 }
 
 export type SpotlightView = HybridView<SpotlightProps, SpotlightMethods>;
