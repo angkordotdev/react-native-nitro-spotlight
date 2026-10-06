@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-spotlight",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Walkthtought the app using nitro view wiht react native teleport",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
