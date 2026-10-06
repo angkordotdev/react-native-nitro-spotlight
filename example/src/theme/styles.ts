@@ -6,7 +6,6 @@ export const spotlightProps = {
   borderWidth: 1.5,
   padding: 8,
   borderColor: '#8FB7FF',
-  allowOverlayClick: true,
 } as const;
 
 export const styles = StyleSheet.create({

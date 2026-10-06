@@ -80,33 +80,54 @@ namespace margelo::nitro::spotlight {
     inline void setShape(const std::optional<std::string>& shape) noexcept override {
       _swiftPart.setShape(shape);
     }
-    inline std::optional<double> getBorderRadius() noexcept override {
-      auto __result = _swiftPart.getBorderRadius();
+    inline std::optional<double> getCornerRadius() noexcept override {
+      auto __result = _swiftPart.getCornerRadius();
       return __result;
     }
-    inline void setBorderRadius(std::optional<double> borderRadius) noexcept override {
-      _swiftPart.setBorderRadius(borderRadius);
+    inline void setCornerRadius(std::optional<double> cornerRadius) noexcept override {
+      _swiftPart.setCornerRadius(cornerRadius);
     }
-    inline std::optional<double> getPadding() noexcept override {
-      auto __result = _swiftPart.getPadding();
+    inline std::optional<double> getCutoutPadding() noexcept override {
+      auto __result = _swiftPart.getCutoutPadding();
       return __result;
     }
-    inline void setPadding(std::optional<double> padding) noexcept override {
-      _swiftPart.setPadding(padding);
+    inline void setCutoutPadding(std::optional<double> cutoutPadding) noexcept override {
+      _swiftPart.setCutoutPadding(cutoutPadding);
     }
-    inline std::optional<double> getBorderWidth() noexcept override {
-      auto __result = _swiftPart.getBorderWidth();
+    inline std::optional<double> getRingWidth() noexcept override {
+      auto __result = _swiftPart.getRingWidth();
       return __result;
     }
-    inline void setBorderWidth(std::optional<double> borderWidth) noexcept override {
-      _swiftPart.setBorderWidth(borderWidth);
+    inline void setRingWidth(std::optional<double> ringWidth) noexcept override {
+      _swiftPart.setRingWidth(ringWidth);
     }
-    inline std::optional<std::string> getBorderColor() noexcept override {
-      auto __result = _swiftPart.getBorderColor();
+    inline std::optional<std::string> getRingColor() noexcept override {
+      auto __result = _swiftPart.getRingColor();
       return __result;
     }
-    inline void setBorderColor(const std::optional<std::string>& borderColor) noexcept override {
-      _swiftPart.setBorderColor(borderColor);
+    inline void setRingColor(const std::optional<std::string>& ringColor) noexcept override {
+      _swiftPart.setRingColor(ringColor);
+    }
+    inline std::optional<std::string> getEnteringAnimation() noexcept override {
+      auto __result = _swiftPart.getEnteringAnimation();
+      return __result;
+    }
+    inline void setEnteringAnimation(const std::optional<std::string>& enteringAnimation) noexcept override {
+      _swiftPart.setEnteringAnimation(enteringAnimation);
+    }
+    inline std::optional<std::string> getExitAnimation() noexcept override {
+      auto __result = _swiftPart.getExitAnimation();
+      return __result;
+    }
+    inline void setExitAnimation(const std::optional<std::string>& exitAnimation) noexcept override {
+      _swiftPart.setExitAnimation(exitAnimation);
+    }
+    inline std::optional<double> getExitDurationMs() noexcept override {
+      auto __result = _swiftPart.getExitDurationMs();
+      return __result;
+    }
+    inline void setExitDurationMs(std::optional<double> exitDurationMs) noexcept override {
+      _swiftPart.setExitDurationMs(exitDurationMs);
     }
     inline std::optional<bool> getAllowOverlayClick() noexcept override {
       auto __result = _swiftPart.getAllowOverlayClick();

@@ -5,35 +5,47 @@ enum SpotlightShape: String {
   case circle
 }
 
+/// Transition used when the spotlight appears from idle / is cleared.
+enum SpotlightTransition: String {
+  case zoom
+  case fade
+  case none
+}
+
 public final class SpotlightView: UIView {
 
   // MARK: - Config
 
+  // Style-only props (dim/ring) never touch the path layers, so they can't
+  // cancel an in-flight highlight animation.
   var dimOpacity: CGFloat = 0.55 {
     didSet {
       guard oldValue != dimOpacity else { return }
-      redraw(animated: false)
+      applyStyle()
     }
   }
 
+  // Geometry props re-animate from the current (presentation) path while a
+  // highlight is showing, so e.g. a per-step `shape` change morphs instead of
+  // snapping on the previous target.
   var borderRadius: CGFloat = 12 {
     didSet {
       guard oldValue != borderRadius else { return }
-      redraw(animated: false)
+      redrawForGeometryChange()
     }
   }
 
   var padding: CGFloat = 6 {
     didSet {
       guard oldValue != padding else { return }
-      redraw(animated: false)
+      redrawForGeometryChange()
     }
   }
 
   var borderWidth: CGFloat = 0 {
     didSet {
       guard oldValue != borderWidth else { return }
-      redraw(animated: false)
+      applyStyle()
     }
   }
 
@@ -41,19 +53,22 @@ public final class SpotlightView: UIView {
     didSet {
       guard oldValue != borderColor else { return }
       resolvedBorderColor = UIColor.spotlightColor(from: borderColor)
-      ringLayer.strokeColor = resolvedBorderColor.cgColor
-      redraw(animated: false)
+      applyStyle()
     }
   }
 
   var shape: SpotlightShape = .rect {
     didSet {
       guard oldValue != shape else { return }
-      redraw(animated: false)
+      redrawForGeometryChange()
     }
   }
 
   var allowOverlayClick = false
+
+  var enteringAnimation: SpotlightTransition = .zoom
+  var exitAnimation: SpotlightTransition = .zoom
+  var exitDuration: TimeInterval = 0.2
 
   var onBackdropPress: (() -> Void)?
 
@@ -68,6 +83,7 @@ public final class SpotlightView: UIView {
   private var currentOverlayPath: UIBezierPath?
   private var currentHolePath: UIBezierPath?
   private var resolvedBorderColor = UIColor.white
+  private var needsRedrawAfterAnimation = false
 
   // MARK: - Init
 
@@ -114,7 +130,11 @@ public final class SpotlightView: UIView {
     // Skip while a highlight transition is animating — any layout pass
     // (keyboard, safe-area change, parent resize) would otherwise cancel
     // the in-flight CABasicAnimation and snap the mask to its final path.
-    guard !hasRunningPathAnimation else { return }
+    // Remember it though: the paths are stale until the animation finishes.
+    guard !hasRunningPathAnimation else {
+      needsRedrawAfterAnimation = true
+      return
+    }
     redraw(animated: false)
   }
 
@@ -212,6 +232,22 @@ public final class SpotlightView: UIView {
 
   // MARK: - Coordinate Conversion
 
+  /// Converts a measureInWindow rect into the coordinate space of the
+  /// `<Spotlight>` wrapper (the host's superview), which is where JS renders
+  /// the tooltip. Matches Android's overlay-local `onTargetLayout` rect.
+  func wrapperRect(fromWindowRect rect: CGRect) -> Rect {
+    var converted = rect
+    if let window, let wrapper = superview?.superview {
+      converted = wrapper.convert(rect, from: window)
+    }
+    return Rect(
+      x: Double(converted.origin.x),
+      y: Double(converted.origin.y),
+      width: Double(converted.size.width),
+      height: Double(converted.size.height)
+    )
+  }
+
   private func localRect(from rect: CGRect) -> CGRect {
     guard let window else { return rect }
     return window.convert(rect, to: self)
@@ -219,44 +255,161 @@ public final class SpotlightView: UIView {
 
   // MARK: - Drawing
 
+  /// Updates fill/stroke style without touching the path layers or any
+  /// in-flight path animation.
+  private func applyStyle() {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    spotlightMask.fillColor = UIColor.black.withAlphaComponent(dimOpacity).cgColor
+    ringLayer.isHidden = borderWidth <= 0
+    ringLayer.strokeColor = resolvedBorderColor.cgColor
+    ringLayer.lineWidth = borderWidth
+    CATransaction.commit()
+  }
+
+  private func redrawForGeometryChange() {
+    redraw(animated: !sourceRect.isEmpty)
+  }
+
   private func redraw(
     animated: Bool,
     duration: TimeInterval = 0.25
   ) {
-    spotlightMask.fillColor = UIColor.black.withAlphaComponent(dimOpacity).cgColor
-
-    ringLayer.isHidden = borderWidth <= 0
-    ringLayer.strokeColor = resolvedBorderColor.cgColor
-    ringLayer.lineWidth = borderWidth
+    applyStyle()
 
     let nextHolePath = makeHolePath()
     let nextOverlayPath = makeOverlayPath(holePath: nextHolePath)
     let nextRingPath = makeRingPath(holePath: nextHolePath)
 
     let oldOverlayPath = currentOverlayPath
+    let oldHolePath = currentHolePath
     currentOverlayPath = nextOverlayPath
     currentHolePath = nextHolePath
+    needsRedrawAfterAnimation = false
 
-    if animated {
-      animate(
-        layer: spotlightMask,
-        from: oldOverlayPath?.cgPath ?? spotlightMask.presentation()?.path ?? spotlightMask.path,
-        to: nextOverlayPath?.cgPath,
-        duration: duration
-      )
-      animate(
-        layer: ringLayer,
-        from: ringLayer.presentation()?.path ?? ringLayer.path,
-        to: nextRingPath?.cgPath,
-        duration: duration
-      )
-    } else {
+    // Opacity to resume a fade from if one is interrupted mid-flight.
+    let runningFade = spotlightMask.animation(forKey: Self.fadeKey) != nil
+    let fadeStartOpacity: Float = runningFade ? (spotlightMask.presentation()?.opacity ?? 1) : 1
+    spotlightMask.removeAnimation(forKey: Self.fadeKey)
+    ringLayer.removeAnimation(forKey: Self.fadeKey)
+    setLayerOpacity(1)
+
+    let isEntering = nextHolePath != nil && oldHolePath == nil
+    let isExiting = nextHolePath == nil && oldHolePath != nil
+    let transition: SpotlightTransition =
+      isEntering ? enteringAnimation : (isExiting ? exitAnimation : .zoom)
+
+    guard animated, !((isEntering || isExiting) && transition == .none) else {
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
       spotlightMask.removeAnimation(forKey: "path")
       spotlightMask.path = nextOverlayPath?.cgPath
 
       ringLayer.removeAnimation(forKey: "path")
       ringLayer.path = nextRingPath?.cgPath
+      CATransaction.commit()
+      return
     }
+
+    // Fade: the cutout stays put and only the dim/ring opacity animates.
+    if (isEntering || isExiting) && transition == .fade {
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      spotlightMask.removeAnimation(forKey: "path")
+      ringLayer.removeAnimation(forKey: "path")
+      // Exiting keeps showing the old hole while it fades out.
+      spotlightMask.path = (isExiting ? oldOverlayPath : nextOverlayPath)?.cgPath
+      ringLayer.path = (isExiting ? oldHolePath : nextRingPath)?.cgPath
+      CATransaction.commit()
+
+      CATransaction.begin()
+      CATransaction.setCompletionBlock { [weak self] in
+        self?.pathAnimationDidFinish()
+      }
+      if isEntering {
+        fadeLayers(from: runningFade ? fadeStartOpacity : 0, to: 1, duration: duration)
+      } else {
+        fadeLayers(from: fadeStartOpacity, to: 0, duration: duration)
+      }
+      CATransaction.commit()
+      return
+    }
+
+    // Show from idle grows the hole out of the target centre; clear collapses
+    // it back into the old centre. Both use a 1pt rounded rect so the path
+    // structure matches the real hole and Core Animation can interpolate.
+    var fromOverlay = oldOverlayPath?.cgPath
+    var fromRing = oldHolePath?.cgPath
+    var toOverlay = nextOverlayPath?.cgPath
+    var toRing = nextRingPath?.cgPath
+
+    if let nextHolePath, oldHolePath == nil {
+      let collapsed = collapsedHolePath(around: nextHolePath.bounds)
+      fromOverlay = makeOverlayPath(holePath: collapsed)?.cgPath
+      fromRing = collapsed.cgPath
+    } else if nextHolePath == nil, let oldHolePath {
+      let collapsed = collapsedHolePath(around: oldHolePath.bounds)
+      toOverlay = makeOverlayPath(holePath: collapsed)?.cgPath
+      toRing = collapsed.cgPath
+    }
+
+    CATransaction.begin()
+    CATransaction.setCompletionBlock { [weak self] in
+      self?.pathAnimationDidFinish()
+    }
+    animate(layer: spotlightMask, from: fromOverlay, to: toOverlay, duration: duration)
+    animate(layer: ringLayer, from: fromRing, to: toRing, duration: duration)
+    CATransaction.commit()
+  }
+
+  private static let fadeKey = "fade"
+
+  private func setLayerOpacity(_ value: Float) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    spotlightMask.opacity = value
+    ringLayer.opacity = value
+    CATransaction.commit()
+  }
+
+  /// Animates both layers' opacity. The model value is set to `to` up front so
+  /// the layers don't snap back when the animation is removed.
+  private func fadeLayers(from: Float, to: Float, duration: TimeInterval) {
+    setLayerOpacity(to)
+    for layer in [spotlightMask, ringLayer] {
+      let anim = CABasicAnimation(keyPath: "opacity")
+      anim.fromValue = from
+      anim.toValue = to
+      anim.duration = duration
+      anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+      anim.isRemovedOnCompletion = true
+      layer.add(anim, forKey: Self.fadeKey)
+    }
+  }
+
+  private func pathAnimationDidFinish() {
+    // A newer animation took over — it owns the cleanup.
+    guard !hasRunningPathAnimation else { return }
+    if sourceRect.isEmpty {
+      // Collapse finished: drop the collapsed hole so nothing stays dimmed.
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      spotlightMask.path = nil
+      ringLayer.path = nil
+      spotlightMask.opacity = 1
+      ringLayer.opacity = 1
+      CATransaction.commit()
+    } else if needsRedrawAfterAnimation {
+      redraw(animated: false)
+    }
+  }
+
+  private func collapsedHolePath(around rect: CGRect) -> UIBezierPath {
+    let center = CGPoint(x: rect.midX, y: rect.midY)
+    return UIBezierPath(
+      roundedRect: CGRect(x: center.x - 0.5, y: center.y - 0.5, width: 1, height: 1),
+      cornerRadius: 0.5
+    )
   }
 
   private func makeHolePath() -> UIBezierPath? {
@@ -274,7 +427,9 @@ public final class SpotlightView: UIView {
     case .rect:
       return UIBezierPath(
         roundedRect: cutRect,
-        cornerRadius: max(borderRadius + padding, 0)
+        // Keep > 0: a zero radius yields a different path element structure
+        // (plain rect) that can't be interpolated with the rounded/circle one.
+        cornerRadius: max(borderRadius + padding, 0.01)
       )
     }
   }
@@ -303,7 +458,8 @@ public final class SpotlightView: UIView {
 
   private var hasRunningPathAnimation: Bool {
     spotlightMask.animation(forKey: "path") != nil ||
-    ringLayer.animation(forKey: "path") != nil
+    ringLayer.animation(forKey: "path") != nil ||
+    spotlightMask.animation(forKey: Self.fadeKey) != nil
   }
 
   private func animate(

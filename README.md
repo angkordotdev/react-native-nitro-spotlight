@@ -583,10 +583,19 @@ Render one per screen or flow.
 | `padding` | `number` | Extra space around the highlighted view. |
 | `borderWidth` | `number` | Width of the cutout ring. Use `0` to hide it. |
 | `borderColor` | `string` | Ring color. Hex strings like `"#FFFFFF"` are supported. |
+| `enteringAnimation` | `'zoom' \| 'fade' \| 'none'` | How the spotlight appears from idle. Default `'zoom'` (cutout grows out of the target). `'fade'` fades the dim in with the cutout in place. Duration is the `durationMs` passed to `highlight()`. |
+| `exitAnimation` | `'zoom' \| 'fade' \| 'none'` | How the spotlight disappears on `clear()`. Default `'zoom'` (cutout collapses into its centre). `'fade'` fades the dim out in place. |
+| `exitDurationMs` | `number` | Duration of the exit animation. Default `200`. |
 | `allowOverlayClick` | `boolean` | Lets backdrop touches pass through to views/buttons underneath. `onBackdropPress` still fires. |
 | `onBackdropPress` | `() => void` | Called when the backdrop outside the cutout is tapped. |
 | `style` | `ViewStyle` | Style for the zero-size native anchor. Usually not needed. |
 | `spotlightRef` | `RefObject<SpotlightRef \| null>` | Deprecated escape hatch. Prefer `controls`. |
+
+Moving from one target to another while the spotlight is showing always animates the cutout between the two rects; `enteringAnimation` / `exitAnimation` only apply when it appears from idle or is cleared.
+
+```tsx
+<Spotlight controls={spotlight} enteringAnimation="fade" exitAnimation="fade" />
+```
 
 ### `useSpotlightTour({ steps })`
 

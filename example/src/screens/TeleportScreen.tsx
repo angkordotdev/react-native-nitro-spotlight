@@ -38,6 +38,8 @@ export function TeleportScreen() {
             controls={spotlight}
             {...spotlightProps}
             onBackdropPress={spotlight.clear}
+            enteringAnimation="fade"
+            // exitAnimation="fade"
           >
             {spotlight.targetRect ? (
               <TooltipCard targetRect={spotlight.targetRect}>

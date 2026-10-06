@@ -25,7 +25,7 @@ Public JS/TS API:
 
 Native iOS:
 
-- `ios/SpotlightOverlayView.swift`
+- `ios/SpotlightView.swift`
 - `ios/HybridSpotlightView.swift`
 
 Native Android:
@@ -83,6 +83,10 @@ When debugging tooltip positioning:
 - On iOS, `onTargetLayout` fires with window-local coordinates from the native layer; the iOS overlay starts at y=0 (full-screen), so no offset correction is needed.
 - `useWindowDimensions()` provides `screenHeight` for placement; this matches the overlay height when the overlay fills the full screen.
 
+## Native prop names
+
+The Nitro spec (`src/Spotlight.nitro.ts`) uses `cornerRadius`, `cutoutPadding`, `ringWidth` and `ringColor` — NOT `borderRadius`/`padding`/`borderWidth`/`borderColor`. The latter are standard ViewProps; Fabric applies them as Yoga padding/border and collapses the overlay view. The public `<Spotlight>` props keep the familiar names and `Spotlight.tsx` maps them. After changing the spec run `yarn nitrogen`.
+
 ## Touch behavior contract
 
 Do not regress this behavior:
@@ -94,6 +98,12 @@ Do not regress this behavior:
 
 Never document `onBackdropPress` as only firing when `allowOverlayClick` is false.
 
+Implementation notes:
+
+- iOS: `<SpotlightView>` is rendered with `pointerEvents="box-none"` so the host (which `syncFrameToWindow` sizes to the window) never wins the hit-test; `SpotlightView.hitTest` decides.
+- Android: the overlay implements `ReactPointerEventsView` returning `BOX_NONE` (JS never targets it) and blocks natively in `dispatchTouchEvent`; on a blocked backdrop DOWN it calls `NativeGestureUtil.notifyNativeGestureStarted` to cancel the JS touch underneath. The overlay also fits itself to its parent's size (`fitToParent`) because Fabric does not apply the JS `style` to the Nitro host view.
+- `onBackdropPress` fires on touch-down in pass-through mode and on touch-up (no slop, end point on backdrop) in blocking mode.
+
 ## Animation contract
 
 Do not restart duplicate same-target animations.
@@ -103,6 +113,8 @@ Expected behavior:
 - Same target while currently animating: ignore duplicate highlight.
 - Different target: interrupt and animate to the new target.
 - Duplicate clear while clearing: ignore duplicate clear.
+
+`enteringAnimation` / `exitAnimation` (`zoom` default | `fade` | `none`) only affect idle→visible and visible→cleared. `zoom` grows/collapses the cutout from the target centre, `fade` animates dim/ring opacity with the cutout in place (iOS: layer opacity; Android: overlay alpha + header strip alpha), `none` is instant. `exitDurationMs` defaults to 200.
 
 Visible hitches can happen without CPU slowness. Prefer Core Animation traces when diagnosing animation smoothness.
 
@@ -145,6 +157,10 @@ On Android 15+, edge-to-edge is mandatory — the app window starts at physical 
 3. Dividing back to DIP
 
 `HybridSpotlightView` calls `windowDpToLocalDip()` before firing `onTargetLayout`, so user tooltip components always receive rect coordinates in the overlay's local DIP space via `controls.targetRect`, regardless of windowing mode.
+
+### Zero-size parents (FullWindowOverlay on Android)
+
+react-native-screens' `FullWindowOverlay` is iOS-only; on Android it renders a plain style-less `<View>`, so the `<Spotlight>` wrapper's parent is 0x0. `SpotlightOverlayView.fitToParent()` then sizes the overlay to the window (`rootView`) so the dim/cutout still draw (RN doesn't clip children), sets `isFittedToParent = false`, and `HybridSpotlightView.showHeaderDim()` skips the header strip. Touches cannot be blocked outside a zero-size parent's bounds, so backdrop taps/`onBackdropPress` don't work there — recommend the Teleport `PortalHost` approach on Android.
 
 ### Drawing
 

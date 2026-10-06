@@ -1,8 +1,8 @@
 package com.margelo.nitro.spotlight
 
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.RectF
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -38,19 +38,38 @@ class HybridSpotlightView(
    */
   private val headerDimView = View(context)
   private var headerDimAdded = false
-  private var headerDimRetryPosted = false
   private var decorView: ViewGroup? = null
+
+  /**
+   * Last requested highlight rect in measureInWindow DIP, or null while no
+   * spotlight is active. Source of truth for "is a highlight showing", used to
+   * re-emit onTargetLayout after layout changes and to gate the header dim.
+   */
+  private var lastWindowRect: RectF? = null
 
   init {
     // Clean up headerDimView when the spotlight overlay detaches from its
     // window (unmount without recycle). prepareForRecycle() handles the pool
-    // case; this listener covers destruction / direct unmount.
+    // case; this listener covers destruction / direct unmount. On re-attach
+    // (Teleport reparent, react-native-screens) restore it if a highlight is
+    // still active.
     spotlightView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-      override fun onViewAttachedToWindow(v: View) {}
+      override fun onViewAttachedToWindow(v: View) {
+        if (lastWindowRect != null) showHeaderDim()
+      }
+
       override fun onViewDetachedFromWindow(v: View) {
         hideHeaderDim()
       }
     })
+
+    // First layout / rotation / reparent: the overlay origin may have changed,
+    // so re-emit the corrected target rect and (re)size the header dim, which
+    // depends on the overlay's laid-out screen position.
+    spotlightView.onGeometryChanged = {
+      emitTargetLayout()
+      showHeaderDim()
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -64,6 +83,9 @@ class HybridSpotlightView(
   private var borderWidthValue: Double? = null
   private var borderColorValue: String? = null
   private var allowOverlayClickValue: Boolean? = null
+  private var enteringAnimationValue: String? = null
+  private var exitAnimationValue: String? = null
+  private var exitDurationMsValue: Double? = null
 
   // -------------------------------------------------------------------------
   // Nitro / Fabric entry-point
@@ -96,7 +118,7 @@ class HybridSpotlightView(
       UiThreadUtil.runOnUiThread { spotlightView.shape = value ?: DEFAULT_SHAPE }
     }
 
-  override var borderRadius: Double?
+  override var cornerRadius: Double?
     get() = borderRadiusValue
     set(value) {
       if (borderRadiusValue == value) return
@@ -104,7 +126,7 @@ class HybridSpotlightView(
       UiThreadUtil.runOnUiThread { spotlightView.borderRadius = (value ?: DEFAULT_BORDER_RADIUS).toFloat() }
     }
 
-  override var padding: Double?
+  override var cutoutPadding: Double?
     get() = paddingValue
     set(value) {
       if (paddingValue == value) return
@@ -112,7 +134,7 @@ class HybridSpotlightView(
       UiThreadUtil.runOnUiThread { spotlightView.padding = (value ?: DEFAULT_PADDING).toFloat() }
     }
 
-  override var borderWidth: Double?
+  override var ringWidth: Double?
     get() = borderWidthValue
     set(value) {
       if (borderWidthValue == value) return
@@ -120,7 +142,7 @@ class HybridSpotlightView(
       UiThreadUtil.runOnUiThread { spotlightView.borderWidth = (value ?: DEFAULT_BORDER_WIDTH).toFloat() }
     }
 
-  override var borderColor: String?
+  override var ringColor: String?
     get() = borderColorValue
     set(value) {
       if (borderColorValue == value) return
@@ -133,7 +155,36 @@ class HybridSpotlightView(
     set(value) {
       if (allowOverlayClickValue == value) return
       allowOverlayClickValue = value
-      UiThreadUtil.runOnUiThread { spotlightView.allowOverlayClick = value ?: DEFAULT_ALLOW_OVERLAY_CLICK }
+      UiThreadUtil.runOnUiThread {
+        spotlightView.allowOverlayClick = value ?: DEFAULT_ALLOW_OVERLAY_CLICK
+        syncHeaderDimTouch()
+      }
+    }
+
+  override var enteringAnimation: String?
+    get() = enteringAnimationValue
+    set(value) {
+      if (enteringAnimationValue == value) return
+      enteringAnimationValue = value
+      UiThreadUtil.runOnUiThread {
+        spotlightView.enteringAnimation = value ?: TRANSITION_ZOOM
+      }
+    }
+
+  override var exitAnimation: String?
+    get() = exitAnimationValue
+    set(value) {
+      if (exitAnimationValue == value) return
+      exitAnimationValue = value
+      UiThreadUtil.runOnUiThread {
+        spotlightView.exitAnimation = value ?: TRANSITION_ZOOM
+      }
+    }
+
+  override var exitDurationMs: Double?
+    get() = exitDurationMsValue
+    set(value) {
+      exitDurationMsValue = value
     }
 
   override var onTargetLayout: ((com.margelo.nitro.spotlight.Rect) -> Unit)? = null
@@ -143,7 +194,6 @@ class HybridSpotlightView(
       field = value
       UiThreadUtil.runOnUiThread {
         spotlightView.onBackdropPress = value
-        syncHeaderDimClickHandler()
       }
     }
 
@@ -157,7 +207,12 @@ class HybridSpotlightView(
     width: Double,
     height: Double,
   ) {
+    // Mirror iOS: an unmeasured/zero-size target is ignored rather than
+    // clearing the overlay or dimming the header with no hole.
+    if (width <= 0.0 || height <= 0.0) return
     UiThreadUtil.runOnUiThread {
+      val entering = lastWindowRect == null
+      lastWindowRect = RectF(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat())
       spotlightView.setHighlight(
         xDp      = x.toFloat(),
         yDp      = y.toFloat(),
@@ -165,8 +220,9 @@ class HybridSpotlightView(
         heightDp = height.toFloat(),
         animated = false,
       )
-      onTargetLayout?.invoke(localDipRect(x, y, width, height))
+      emitTargetLayout()
       showHeaderDim()
+      animateHeaderDimIn(entering, durationMs = 0L)
     }
   }
 
@@ -177,7 +233,10 @@ class HybridSpotlightView(
     height: Double,
     durationMs: Double,
   ) {
+    if (width <= 0.0 || height <= 0.0) return
     UiThreadUtil.runOnUiThread {
+      val entering = lastWindowRect == null
+      lastWindowRect = RectF(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat())
       spotlightView.setHighlight(
         xDp        = x.toFloat(),
         yDp        = y.toFloat(),
@@ -186,15 +245,49 @@ class HybridSpotlightView(
         animated   = true,
         durationMs = durationMs.toLong(),
       )
-      onTargetLayout?.invoke(localDipRect(x, y, width, height))
+      emitTargetLayout()
       showHeaderDim()
+      animateHeaderDimIn(entering, durationMs.toLong())
     }
   }
 
   override fun clear() {
     UiThreadUtil.runOnUiThread {
-      spotlightView.clear(durationMs = 0L)
-      hideHeaderDim()
+      lastWindowRect = null
+      val exitMs = (exitDurationMsValue ?: DEFAULT_EXIT_DURATION_MS).toLong()
+      // The overlay runs the configured exit animation; the header strip is
+      // dropped when it finishes. A highlight arriving mid-exit cancels the
+      // animation and calls showHeaderDim() itself, so a skipped onFinished
+      // is safe.
+      spotlightView.clear(durationMs = exitMs) { hideHeaderDim() }
+      if (headerDimAdded && exitMs > 0L &&
+        (exitAnimationValue ?: TRANSITION_ZOOM) == TRANSITION_FADE
+      ) {
+        // Fade the status-bar/header strip together with the overlay.
+        headerDimView.animate().cancel()
+        // Don't reset alpha here: the view is still attached until the posted
+        // removal runs, and snapping back to 1 would flash the header dim.
+        // removeHeaderDimNow() restores alpha after detaching it.
+        headerDimView.animate().alpha(0f).setDuration(exitMs).withEndAction {
+          if (lastWindowRect == null) hideHeaderDim()
+        }.start()
+      }
+    }
+  }
+
+  /**
+   * Header strip counterpart of the overlay's entering animation: fade it in
+   * together with the overlay when the spotlight first appears.
+   */
+  private fun animateHeaderDimIn(entering: Boolean, durationMs: Long) {
+    headerDimView.animate().cancel()
+    val fade = entering && durationMs > 0L &&
+      (enteringAnimationValue ?: TRANSITION_ZOOM) == TRANSITION_FADE
+    if (fade) {
+      headerDimView.alpha = 0f
+      headerDimView.animate().alpha(1f).setDuration(durationMs).start()
+    } else {
+      headerDimView.alpha = 1f
     }
   }
 
@@ -212,6 +305,10 @@ class HybridSpotlightView(
     borderWidthValue = null
     borderColorValue = null
     allowOverlayClickValue = null
+    enteringAnimationValue = null
+    exitAnimationValue = null
+    exitDurationMsValue = null
+    lastWindowRect = null
     UiThreadUtil.runOnUiThread {
       spotlightView.dimOpacity = DEFAULT_DIM_OPACITY.toFloat()
       spotlightView.shape = DEFAULT_SHAPE
@@ -220,7 +317,10 @@ class HybridSpotlightView(
       spotlightView.borderWidth = DEFAULT_BORDER_WIDTH.toFloat()
       spotlightView.borderColor = DEFAULT_BORDER_COLOR
       spotlightView.allowOverlayClick = DEFAULT_ALLOW_OVERLAY_CLICK
+      spotlightView.enteringAnimation = TRANSITION_ZOOM
+      spotlightView.exitAnimation = TRANSITION_ZOOM
       spotlightView.onBackdropPress = null
+      lastWindowRect = null
       spotlightView.clear(durationMs = 0L)
       hideHeaderDim()
       decorView = null
@@ -241,11 +341,20 @@ class HybridSpotlightView(
    * the status-bar height. Using local DIP ensures SpotlightTooltip positions
    * correctly regardless of windowing mode.
    */
-  private fun localDipRect(x: Double, y: Double, width: Double, height: Double): com.margelo.nitro.spotlight.Rect {
-    val windowDp = RectF(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat())
+  private fun emitTargetLayout() {
+    val rect = lastWindowRect ?: return
+    onTargetLayout?.invoke(localDipRect(rect))
+  }
+
+  private fun localDipRect(windowDp: RectF): com.margelo.nitro.spotlight.Rect {
     val local = spotlightView.windowDpToLocalDip(windowDp)
     return if (local.isEmpty) {
-      com.margelo.nitro.spotlight.Rect(x = x, y = y, width = width, height = height)
+      com.margelo.nitro.spotlight.Rect(
+        x = windowDp.left.toDouble(),
+        y = windowDp.top.toDouble(),
+        width = windowDp.width().toDouble(),
+        height = windowDp.height().toDouble(),
+      )
     } else {
       com.margelo.nitro.spotlight.Rect(
         x      = local.left.toDouble(),
@@ -261,6 +370,9 @@ class HybridSpotlightView(
   // -------------------------------------------------------------------------
 
   private fun showHeaderDim() {
+    // Only while a highlight is active — a late layout callback after clear()
+    // must not resurrect the strip.
+    if (lastWindowRect == null) return
     val dv = context.currentActivity?.window?.decorView as? ViewGroup ?: return
 
     // Skip if the spotlight overlay lives in a different window than the
@@ -272,6 +384,19 @@ class HybridSpotlightView(
 
     decorView = dv
 
+    // Not laid out yet: getLocationOnScreen would report [0,0]. The overlay
+    // calls onGeometryChanged after its first layout, which re-enters here, so
+    // no polling/retry is needed.
+    if (!spotlightView.isLaidOut) return
+
+    // Overlay sized from the window (zero-size parent, e.g. FullWindowOverlay
+    // on Android): its screen position says nothing about how much sits above
+    // the React tree, so don't guess a header strip.
+    if (!spotlightView.isFittedToParent) {
+      hideHeaderDim()
+      return
+    }
+
     // Measure how many pixels sit above the React-managed spotlightView
     // (status bar height + native navigation header height).
     val origin = IntArray(2)
@@ -281,17 +406,9 @@ class HybridSpotlightView(
     // Everything from y=0 to y=origin[1] is above the React tree.
     val coveredHeight = origin[1]
     if (coveredHeight <= 0) {
-      // spotlightView hasn't been laid out yet (e.g. highlight() called on
-      // first mount before the first layout pass) — getLocationOnScreen
-      // returns [0,0]. Retry once after the next layout/message-queue pass
-      // instead of leaving the header permanently un-dimmed.
-      if (!headerDimRetryPosted) {
-        headerDimRetryPosted = true
-        spotlightView.post {
-          headerDimRetryPosted = false
-          showHeaderDim()
-        }
-      }
+      // Overlay starts at the top of the window (root-level portal host, no
+      // native header, immersive mode): nothing sits above it to cover.
+      hideHeaderDim()
       return
     }
 
@@ -303,11 +420,12 @@ class HybridSpotlightView(
 
     // Update color in case dimOpacity changed since last time.
     headerDimView.setBackgroundColor(dimArgb(dimOpacityValue ?: DEFAULT_DIM_OPACITY))
-    syncHeaderDimClickHandler()
+    syncHeaderDimTouch()
 
     // hideHeaderDim() sets headerDimAdded = false then asynchronously posts
     // removeView. If showHeaderDim fires again before that post runs, the view is
-    // still attached — addView would throw "already has a parent". Re-adopt it.
+    // still attached — addView would throw "already has a parent". Re-adopt it
+    // (the posted removal re-checks headerDimAdded and backs off).
     if (headerDimView.parent === dv) {
       headerDimAdded = true
       val params = headerDimView.layoutParams as? FrameLayout.LayoutParams
@@ -325,19 +443,48 @@ class HybridSpotlightView(
     headerDimAdded = true
   }
 
-  private fun syncHeaderDimClickHandler() {
-    val handler = onBackdropPress
-    headerDimView.isClickable = handler != null
-    headerDimView.setOnClickListener(if (handler != null) View.OnClickListener { handler() } else null)
+  /**
+   * Touch contract for the header strip, mirroring the overlay:
+   *  - default: blocks touches (clickable) and fires onBackdropPress on click;
+   *  - allowOverlayClick: lets touches pass through to the native header but
+   *    still fires onBackdropPress (once, on DOWN).
+   */
+  private fun syncHeaderDimTouch() {
+    val passThrough = allowOverlayClickValue ?: DEFAULT_ALLOW_OVERLAY_CLICK
+    if (passThrough) {
+      headerDimView.setOnTouchListener { _, event ->
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) onBackdropPress?.invoke()
+        false
+      }
+      headerDimView.setOnClickListener(null)
+      // Must come after setOnClickListener(): it forces isClickable = true.
+      headerDimView.isClickable = false
+    } else {
+      headerDimView.setOnTouchListener(null)
+      headerDimView.isClickable = true
+      headerDimView.setOnClickListener { onBackdropPress?.invoke() }
+    }
   }
 
   private fun hideHeaderDim() {
     if (!headerDimAdded) return
     headerDimAdded = false
+    removeHeaderDimNow()
+  }
+
+  private fun removeHeaderDimNow() {
     val dv = decorView ?: return
-    // Post so we never remove a child during the decor-view's own layout traversal.
+    if (headerDimView.parent !== dv) return
+    // Post so we never remove a child during the decor-view's own layout
+    // traversal. Re-check headerDimAdded: a highlight may have re-adopted the
+    // view between this call and the post running (clear() then highlight()).
     dv.post {
-      if (headerDimView.parent === dv) dv.removeView(headerDimView)
+      if (!headerDimAdded && headerDimView.parent === dv) {
+        dv.removeView(headerDimView)
+        // Safe to restore now that it's detached (a fade-out leaves it at 0).
+        headerDimView.animate().cancel()
+        headerDimView.alpha = 1f
+      }
     }
   }
 
@@ -352,5 +499,6 @@ class HybridSpotlightView(
     private const val DEFAULT_BORDER_WIDTH = 1.5
     private const val DEFAULT_BORDER_COLOR = "#FFFFFF"
     private const val DEFAULT_ALLOW_OVERLAY_CLICK = false
+    private const val DEFAULT_EXIT_DURATION_MS = 200.0
   }
 }

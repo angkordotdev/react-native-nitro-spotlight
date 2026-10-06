@@ -12,10 +12,13 @@ public protocol HybridSpotlightViewSpec_protocol: HybridObject, HybridView {
   // Properties
   var dimOpacity: Double? { get set }
   var shape: String? { get set }
-  var borderRadius: Double? { get set }
-  var padding: Double? { get set }
-  var borderWidth: Double? { get set }
-  var borderColor: String? { get set }
+  var cornerRadius: Double? { get set }
+  var cutoutPadding: Double? { get set }
+  var ringWidth: Double? { get set }
+  var ringColor: String? { get set }
+  var enteringAnimation: String? { get set }
+  var exitAnimation: String? { get set }
+  var exitDurationMs: Double? { get set }
   var allowOverlayClick: Bool? { get set }
   var onTargetLayout: ((_ rect: Rect) -> Void)? { get set }
   var onBackdropPress: (() -> Void)? { get set }

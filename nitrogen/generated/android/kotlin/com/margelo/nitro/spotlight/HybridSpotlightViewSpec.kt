@@ -10,6 +10,7 @@ package com.margelo.nitro.spotlight
 import androidx.annotation.Keep
 import com.facebook.jni.HybridData
 import com.facebook.proguard.annotations.DoNotStrip
+import dalvik.annotation.optimization.FastNative
 import com.margelo.nitro.core.HybridObject
 import com.margelo.nitro.views.HybridView
 
@@ -42,25 +43,43 @@ abstract class HybridSpotlightViewSpec: HybridView() {
   @get:Keep
   @set:DoNotStrip
   @set:Keep
-  abstract var borderRadius: Double?
+  abstract var cornerRadius: Double?
   
   @get:DoNotStrip
   @get:Keep
   @set:DoNotStrip
   @set:Keep
-  abstract var padding: Double?
+  abstract var cutoutPadding: Double?
   
   @get:DoNotStrip
   @get:Keep
   @set:DoNotStrip
   @set:Keep
-  abstract var borderWidth: Double?
+  abstract var ringWidth: Double?
   
   @get:DoNotStrip
   @get:Keep
   @set:DoNotStrip
   @set:Keep
-  abstract var borderColor: String?
+  abstract var ringColor: String?
+  
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var enteringAnimation: String?
+  
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var exitAnimation: String?
+  
+  @get:DoNotStrip
+  @get:Keep
+  @set:DoNotStrip
+  @set:Keep
+  abstract var exitDurationMs: Double?
   
   @get:DoNotStrip
   @get:Keep
@@ -119,6 +138,7 @@ abstract class HybridSpotlightViewSpec: HybridView() {
   @Keep
   protected open class CxxPart(javaPart: HybridSpotlightViewSpec): HybridObject.CxxPart(javaPart) {
     // C++ JHybridSpotlightViewSpec::CxxPart::initHybrid(...)
+    @FastNative
     external override fun initHybrid(): HybridData
   }
   override fun createCxxPart(): CxxPart {

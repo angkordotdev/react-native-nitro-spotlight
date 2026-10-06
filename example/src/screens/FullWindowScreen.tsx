@@ -14,7 +14,7 @@ export function FullWindowScreen() {
   return (
     <ScreenShell
       title="FullWindowOverlay"
-      copy="react-native-screens FullWindowOverlay renders above the native navigation bar, so the dim covers the entire window."
+      copy="react-native-screens FullWindowOverlay renders above the native navigation bar on iOS. On Android it is a plain View: the dim still shows, but backdrop taps are not blocked — use the Teleport host screen there."
     >
       <View ref={targetRef} style={styles.card}>
         <Text style={styles.cardLabel}>Full window</Text>
@@ -41,6 +41,9 @@ export function FullWindowScreen() {
         <Spotlight
           controls={spotlight}
           {...spotlightProps}
+          enteringAnimation="fade"
+          exitAnimation="fade"
+          exitDurationMs={300}
           onBackdropPress={spotlight.clear}
         >
           {spotlight.targetRect ? (

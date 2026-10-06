@@ -58,6 +58,10 @@ export function useSpotlight(): SpotlightControls {
   const _ref = useRef<SpotlightView | null>(null);
   const animatingTargetRef = useRef<ComponentRef<typeof View> | null>(null);
   const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped by every highlight()/clear() so measureInWindow callbacks and rAF
+  // retries from a superseded call can detect they are stale and bail out.
+  const generationRef = useRef(0);
+  const activeRef = useRef(false);
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
 
   const finishAnimationGuard = useCallback(() => {
@@ -69,9 +73,17 @@ export function useSpotlight(): SpotlightControls {
     animatingTargetRef.current = null;
   }, []);
 
-  useEffect(() => finishAnimationGuard, [finishAnimationGuard]);
+  useEffect(
+    () => () => {
+      generationRef.current++;
+      finishAnimationGuard();
+    },
+    [finishAnimationGuard]
+  );
 
   const _onTargetLayout = useCallback((rect: Rect) => {
+    // A late native callback after clear() must not resurrect the tooltip rect.
+    if (!activeRef.current) return;
     setTargetRect(rect);
   }, []);
 
@@ -91,6 +103,9 @@ export function useSpotlight(): SpotlightControls {
 
       finishAnimationGuard();
       animatingTargetRef.current = target;
+      const generation = ++generationRef.current;
+      activeRef.current = true;
+      const isStale = () => generation !== generationRef.current;
 
       const animateToRect = (
         x: number,
@@ -98,6 +113,7 @@ export function useSpotlight(): SpotlightControls {
         width: number,
         height: number
       ) => {
+        if (isStale()) return;
         // Re-read the ref: <Spotlight> may have unmounted between highlight()
         // and the measureInWindow callback firing.
         const current = _ref.current;
@@ -113,8 +129,10 @@ export function useSpotlight(): SpotlightControls {
       };
 
       target.measureInWindow((x, y, width, height) => {
+        if (isStale()) return;
         if (width === 0 && height === 0) {
           requestAnimationFrame(() => {
+            if (isStale()) return;
             const retryTarget = viewRef.current;
             if (!retryTarget) {
               finishAnimationGuard();
@@ -122,6 +140,7 @@ export function useSpotlight(): SpotlightControls {
             }
 
             retryTarget.measureInWindow((rx, ry, rw, rh) => {
+              if (isStale()) return;
               if (rw === 0 && rh === 0) {
                 finishAnimationGuard();
                 return;
@@ -139,6 +158,8 @@ export function useSpotlight(): SpotlightControls {
   );
 
   const clear = useCallback(() => {
+    generationRef.current++;
+    activeRef.current = false;
     finishAnimationGuard();
     setTargetRect(null);
     _ref.current?.clear();

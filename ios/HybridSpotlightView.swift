@@ -19,11 +19,12 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
   func beforeUpdate() {
     spotlightView.dimOpacity = CGFloat(dimOpacity ?? Self.defaultDimOpacity)
     spotlightView.shape = SpotlightShape(rawValue: shape ?? "rect") ?? .rect
-    spotlightView.borderRadius = CGFloat(borderRadius ?? Self.defaultBorderRadius)
-    spotlightView.borderColor = borderColor ?? Self.defaultBorderColor
-    spotlightView.padding = CGFloat(padding ?? Self.defaultPadding)
-    spotlightView.borderWidth = CGFloat(borderWidth ?? Self.defaultBorderWidth)
+    spotlightView.borderRadius = CGFloat(cornerRadius ?? Self.defaultBorderRadius)
+    spotlightView.borderColor = ringColor ?? Self.defaultBorderColor
+    spotlightView.padding = CGFloat(cutoutPadding ?? Self.defaultPadding)
+    spotlightView.borderWidth = CGFloat(ringWidth ?? Self.defaultBorderWidth)
     spotlightView.allowOverlayClick = allowOverlayClick ?? Self.defaultAllowOverlayClick
+    applyTransitions()
   }
 
   func onDropView() {
@@ -48,32 +49,61 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
     }
   }
 
-  var borderRadius: Double? {
+  var cornerRadius: Double? {
     didSet {
-      guard oldValue != borderRadius else { return }
-      spotlightView.borderRadius = CGFloat(borderRadius ?? Self.defaultBorderRadius)
+      guard oldValue != cornerRadius else { return }
+      spotlightView.borderRadius = CGFloat(cornerRadius ?? Self.defaultBorderRadius)
     }
   }
 
-  var padding: Double? {
+  var cutoutPadding: Double? {
     didSet {
-      guard oldValue != padding else { return }
-      spotlightView.padding = CGFloat(padding ?? Self.defaultPadding)
+      guard oldValue != cutoutPadding else { return }
+      spotlightView.padding = CGFloat(cutoutPadding ?? Self.defaultPadding)
     }
   }
 
-  var borderWidth: Double? {
+  var ringWidth: Double? {
     didSet {
-      guard oldValue != borderWidth else { return }
-      spotlightView.borderWidth = CGFloat(borderWidth ?? Self.defaultBorderWidth)
+      guard oldValue != ringWidth else { return }
+      spotlightView.borderWidth = CGFloat(ringWidth ?? Self.defaultBorderWidth)
     }
   }
 
-  var borderColor: String? {
+  var ringColor: String? {
     didSet {
-      guard oldValue != borderColor else { return }
-      spotlightView.borderColor = borderColor ?? Self.defaultBorderColor
+      guard oldValue != ringColor else { return }
+      spotlightView.borderColor = ringColor ?? Self.defaultBorderColor
     }
+  }
+
+  var enteringAnimation: String? {
+    didSet {
+      guard oldValue != enteringAnimation else { return }
+      applyTransitions()
+    }
+  }
+
+  var exitAnimation: String? {
+    didSet {
+      guard oldValue != exitAnimation else { return }
+      applyTransitions()
+    }
+  }
+
+  var exitDurationMs: Double? {
+    didSet {
+      guard oldValue != exitDurationMs else { return }
+      applyTransitions()
+    }
+  }
+
+  private func applyTransitions() {
+    spotlightView.enteringAnimation =
+      SpotlightTransition(rawValue: enteringAnimation ?? "") ?? .zoom
+    spotlightView.exitAnimation =
+      SpotlightTransition(rawValue: exitAnimation ?? "") ?? .zoom
+    spotlightView.exitDuration = (exitDurationMs ?? Self.defaultExitDurationMs) / 1000.0
   }
 
   var allowOverlayClick: Bool? {
@@ -102,8 +132,9 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
     guard width > 0, height > 0 else { return }
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      spotlightView.setHighlight(CGRect(x: x, y: y, width: width, height: height), animated: false)
-      onTargetLayout?(Rect(x: x, y: y, width: width, height: height))
+      let windowRect = CGRect(x: x, y: y, width: width, height: height)
+      spotlightView.setHighlight(windowRect, animated: false)
+      onTargetLayout?(spotlightView.wrapperRect(fromWindowRect: windowRect))
     }
   }
 
@@ -117,18 +148,20 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
     guard width > 0, height > 0 else { return }
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      let windowRect = CGRect(x: x, y: y, width: width, height: height)
       spotlightView.setHighlight(
-        CGRect(x: x, y: y, width: width, height: height),
+        windowRect,
         animated: true,
         duration: durationMs / 1000.0
       )
-      onTargetLayout?(Rect(x: x, y: y, width: width, height: height))
+      onTargetLayout?(spotlightView.wrapperRect(fromWindowRect: windowRect))
     }
   }
 
   func clear() throws {
     DispatchQueue.main.async { [weak self] in
-      self?.spotlightView.clear()
+      guard let self else { return }
+      spotlightView.clear(animated: true, duration: spotlightView.exitDuration)
     }
   }
 
@@ -139,4 +172,5 @@ class HybridSpotlightView: HybridSpotlightViewSpec {
   private static let defaultBorderWidth = 1.5
   private static let defaultBorderColor = "#FFFFFF"
   private static let defaultAllowOverlayClick = false
+  private static let defaultExitDurationMs = 200.0
 }
